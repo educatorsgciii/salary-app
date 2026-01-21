@@ -1,118 +1,107 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
 
-# بٹنوں کو سادہ بنانے کے لیے CSS
+# بٹنوں کا ڈیزائن
 st.markdown("""
     <style>
-    div.stButton > button {
-        border: none !important;
-        background-color: transparent !important;
-        color: inherit !important;
-        padding: 0px !important;
-        font-size: 20px !important;
-    }
+    div.stButton > button { border: none !important; background-color: transparent !important; font-size: 20px !important; }
     div.stButton > button:hover { color: #ff4b4b !important; }
-    .salary-slip {
-        border: 2px solid #ff4b4b; padding: 30px; border-radius: 15px;
-        background-color: white; color: black; max-width: 600px; margin: auto;
-    }
+    .slip-box { border: 2px solid #ff4b4b; padding: 25px; border-radius: 15px; background-color: white; color: black; max-width: 600px; margin: auto; }
     </style>
     """, unsafe_allow_html=True)
 
 st.title("🏫 The Educators - Salary Management System")
 
-# ڈیٹا لوڈ کرنا
-sheet_id = "13eYpH7tTx-SCDkCVRFzq5Ar7QXccXoLBIRfsmvufp3Y"
-sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+# گوگل شیٹ سے کنکشن (Secrets لازمی ہیں)
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # ڈیٹا پڑھنا
+    df = conn.read(ttl="0").dropna(how="all")
+    df.columns = df.columns.str.strip()
+    
+    # اگر سیشن میں ڈیٹا نہیں ہے تو لوڈ کریں
+    if 'main_df' not in st.session_state:
+        st.session_state.main_df = df
 
-if 'df' not in st.session_state:
-    try:
-        raw_df = pd.read_csv(sheet_url).dropna(how="all")
-        raw_df.columns = raw_df.columns.str.strip()
-        # ID اور تنخواہ کو صاف کرنا
-        if 'ID' in raw_df.columns:
-            raw_df['ID'] = raw_df['ID'].astype(str).str.replace('.0', '', regex=False)
-        st.session_state.df = raw_df
-    except:
-        st.error("شیٹ لوڈ نہیں ہو سکی۔")
+    working_df = st.session_state.main_df
 
-df = st.session_state.df
-
-# --- ایڈٹ فارم (سائیڈ بار) میں تفصیلات لانا ---
-if 'editing_index' in st.session_state:
-    idx = st.session_state.editing_index
-    if idx in df.index:
-        row = df.loc[idx]
-        st.sidebar.subheader(f"📝 Edit: {row.get('Name', 'Unknown')}")
+    # --- ایڈٹ فنکشن ---
+    if 'edit_idx' in st.session_state:
+        idx = st.session_state.edit_idx
+        row = working_df.loc[idx]
+        st.sidebar.subheader(f"📝 Edit: {row.get('Name', 'Record')}")
         
-        # یہاں ہم یقینی بنا رہے ہیں کہ پرانی قیمتیں نظر آئیں
-        old_salary = str(row.get('Salary', row.get('Basic_Salary', '0')))
-        if old_salary == 'nan': old_salary = "0"
-            
-        new_salary = st.sidebar.text_input("New Salary Amount:", value=old_salary)
+        # تمام موجودہ کالمز کے لیے ان پٹ بنائیں
+        updated_data = {}
+        for col in working_df.columns:
+            updated_data[col] = st.sidebar.text_input(f"Change {col}", str(row[col]))
         
-        if st.sidebar.button("✅ Update Now"):
-            st.session_state.df.at[idx, 'Salary'] = new_salary
-            st.session_state.df.at[idx, 'Basic_Salary'] = new_salary # دونوں کالمز اپ ڈیٹ کریں
-            del st.session_state.editing_index
-            st.rerun()
-        
-        if st.sidebar.button("❌ Cancel"):
-            del st.session_state.editing_index
+        if st.sidebar.button("✅ Update in App"):
+            for col, val in updated_data.items():
+                st.session_state.main_df.at[idx, col] = val
+            del st.session_state.edit_idx
             st.rerun()
 
-# --- ریکارڈ ٹیبل ---
-st.subheader("📊 Employee Records")
-h = st.columns([1, 2, 2, 2, 1, 1])
-for i, head in enumerate(["ID", "Name", "Designation", "Salary", "Edit", "Del"]):
-    h[i].write(f"**{head}**")
-
-st.divider()
-
-for index, row in df.iterrows():
-    c = st.columns([1, 2, 2, 2, 1, 1])
-    c[0].write(row.get('ID', '---'))
-    c[1].write(row.get('Name', '---'))
-    c[2].write(row.get('Designation', '---'))
+    # --- مین ڈسپلے ---
+    st.subheader("📊 Employee Database")
     
-    # تنخواہ دکھانا
-    s_val = row.get('Salary', row.get('Basic_Salary', '0'))
-    c[3].write(s_val if pd.notna(s_val) else "0")
-    
-    if c[4].button("📝", key=f"edit_btn_{index}"):
-        st.session_state.editing_index = index
-        st.rerun()
-    if c[5].button("🗑️", key=f"del_btn_{index}"):
-        st.session_state.df = df.drop(index)
-        st.rerun()
+    # ہیڈرز
+    cols = st.columns(list(range(len(working_df.columns) + 2)))
+    for i, col_name in enumerate(working_df.columns):
+        cols[i].write(f"**{col_name}**")
+    cols[-2].write("**Edit**")
+    cols[-1].write("**Del**")
 
-# --- سیلری سلپ جنریٹر ---
-st.divider()
-st.subheader("🔍 Search & Generate Slip")
-search_id = st.text_input("ملازم کی ID لکھیں:")
-
-if search_id:
-    # سرچ کو مضبوط بنانا
-    matched = df[df['ID'].astype(str).str.strip() == str(search_id).strip()]
-    
-    if not matched.empty:
-        emp = matched.iloc[0]
-        f_salary = emp.get('Salary', emp.get('Basic_Salary', '0'))
-        if pd.isna(f_salary): f_salary = "0"
+    # ڈیٹا لائنز
+    for index, row in working_df.iterrows():
+        c = st.columns(list(range(len(working_df.columns) + 2)))
+        for i, col_name in enumerate(working_df.columns):
+            c[i].write(str(row[col_name]))
         
-        st.markdown(f"""
-            <div class="salary-slip">
-                <h2 style="text-align: center; color: #ff4b4b;">THE EDUCATORS</h2>
-                <p style="text-align: center;">Gulshan Campus III</p>
-                <hr>
-                <p><b>Employee Name:</b> {emp.get('Name', '---')}</p>
-                <p><b>ID:</b> {search_id} | <b>Designation:</b> {emp.get('Designation', '---')}</p>
-                <div style="background: #fdf2f2; padding: 15px; text-align: center; font-size: 20px;">
-                    <b>Total Salary: PKR {f_salary}</b>
+        if c[-2].button("📝", key=f"ed_{index}"):
+            st.session_state.edit_idx = index
+            st.rerun()
+        
+        if c[-1].button("🗑️", key=f"de_{index}"):
+            st.session_state.main_df = working_df.drop(index)
+            st.rerun()
+
+    st.divider()
+    
+    # --- گوگل شیٹ میں سیو کرنے کا جادوئی بٹن ---
+    col_btn1, col_btn2 = st.columns(2)
+    if col_btn1.button("💾 SAVE ALL CHANGES TO GOOGLE SHEET"):
+        with st.spinner("گوگل شیٹ اپ ڈیٹ ہو رہی ہے..."):
+            conn.update(data=st.session_state.main_df)
+            st.success("✅ مبارک ہو! تمام تبدیلیاں گوگل شیٹ میں محفوظ ہو گئی ہیں۔")
+            st.balloons()
+
+    # --- سیلری سلپ سرچ ---
+    st.subheader("🔍 Generate Salary Slip")
+    search_id = st.text_input("ملازم کی ID لکھیں:")
+    if search_id:
+        # آئی ڈی کالم چیک کریں
+        id_col = 'ID' if 'ID' in working_df.columns else working_df.columns[0]
+        match = working_df[working_df[id_col].astype(str).str.contains(str(search_id))]
+        
+        if not match.empty:
+            emp = match.iloc[0]
+            st.markdown(f"""
+                <div class="slip-box">
+                    <h2 style="text-align:center; color:#ff4b4b;">THE EDUCATORS</h2>
+                    <hr>
+                    <p><b>Name:</b> {emp.get('Name', '---')} | <b>Designation:</b> {emp.get('Designation', '---')}</p>
+                    <div style="background:#fdf2f2; padding:15px; text-align:center; font-size:20px;">
+                        <b>Net Salary: PKR {emp.get('Salary', emp.get('Basic', '0'))}</b>
+                    </div>
                 </div>
-            </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.error("اس ID کا کوئی ملازم نہیں ملا۔")
+            """, unsafe_allow_html=True)
+        else:
+            st.error("ریکارڈ نہیں ملا۔")
+
+except Exception as e:
+    st.error("سسٹم کنکٹ نہیں ہو سکا۔ براہِ کرم چیک کریں کہ Secrets صحیح ہیں اور گوگل شیٹ Editor پر شیئر ہے۔")
+    st.info(f"Error details: {e}")
