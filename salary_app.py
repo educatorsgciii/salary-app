@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+import time
 
 # Page Configuration
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
@@ -27,7 +28,6 @@ if choice == "Dashboard":
     st.subheader("📊 Employee Database")
     
     if not df.empty:
-        # Header Row
         h_cols = st.columns([0.5, 2, 2, 2, 1.5, 1.5])
         h_cols[0].markdown("**ID**")
         h_cols[1].markdown("**Name**")
@@ -37,62 +37,41 @@ if choice == "Dashboard":
         h_cols[5].markdown("**Actions**")
         st.divider()
 
-        # Data Rows
         for index, row in df.iterrows():
             cols = st.columns([0.5, 2, 2, 2, 1.5, 1.5])
-            # Safely get ID
-            emp_id = row.get("ID", "N/A")
-            cols[0].write(emp_id) 
+            cols[0].write(row.get("ID", "N/A")) 
             cols[1].write(row.get("Name", "N/A"))
             cols[2].write(row.get("CNIC", "N/A"))
             cols[3].write(row.get("Designation", "N/A"))
-            
-            # Show salary from whichever column exists
             salary_val = row.get("Basic_Salary", row.get("Salary", 0))
             cols[4].write(f"Rs. {salary_val}")
             
-            # Action Buttons
             btn_col1, btn_col2 = cols[5].columns(2)
-            btn_edit = btn_col1.button("✏️", key=f"edit_{index}")
-            btn_del = btn_col2.button("🗑️", key=f"del_{index}")
-
-            if btn_edit:
+            if btn_col1.button("✏️", key=f"edit_{index}"):
                 st.session_state.edit_mode = True
                 st.session_state.edit_index = index
                 st.session_state.edit_data = row.to_dict()
-
-            if btn_del:
+            if btn_col2.button("🗑️", key=f"del_{index}"):
                 updated_df = df.drop(index)
                 conn.update(data=updated_df)
-                st.success(f"❌ Record Deleted!")
+                st.success("❌ Record Removed!")
                 st.cache_data.clear()
                 st.rerun()
 
-        # Edit Form Section
         if st.session_state.get("edit_mode"):
             st.divider()
-            st.subheader(f"🔄 Editing ID: {st.session_state.edit_data.get('ID', 'New')}")
             with st.form("edit_form"):
                 en_name = st.text_input("Name", value=st.session_state.edit_data.get('Name', ''))
                 en_cnic = st.text_input("CNIC", value=st.session_state.edit_data.get('CNIC', ''))
-                
-                designations = ["Teacher", "Principal", "office", "Admin Staff", "Security", "Other"]
-                current_desig = st.session_state.edit_data.get('Designation', 'Other')
-                desig_idx = designations.index(current_desig) if current_desig in designations else 0
-                en_desig = st.selectbox("Designation", designations, index=desig_idx)
-                
-                curr_sal = int(st.session_state.edit_data.get('Basic_Salary', st.session_state.edit_data.get('Salary', 0)))
-                en_sal = st.number_input("Basic Salary", value=curr_sal)
-                
-                if st.form_submit_button("Update Changes"):
+                en_desig = st.selectbox("Designation", ["Teacher", "Principal", "office", "Admin Staff", "Security", "Other"], index=0)
+                en_sal = st.number_input("Salary", value=int(st.session_state.edit_data.get('Basic_Salary', 0)))
+                if st.form_submit_button("Update"):
                     df.at[st.session_state.edit_index, "Name"] = en_name
                     df.at[st.session_state.edit_index, "CNIC"] = en_cnic
                     df.at[st.session_state.edit_index, "Designation"] = en_desig
-                    if "Basic_Salary" in df.columns: df.at[st.session_state.edit_index, "Basic_Salary"] = en_sal
-                    else: df.at[st.session_state.edit_index, "Salary"] = en_sal
-                    
+                    df.at[st.session_state.edit_index, "Basic_Salary"] = en_sal
                     conn.update(data=df)
-                    st.success("✅ Record Updated!")
+                    st.success("✅ Updated!")
                     st.session_state.edit_mode = False
                     st.cache_data.clear()
                     st.rerun()
@@ -102,8 +81,12 @@ if choice == "Dashboard":
 # --- ADD NEW EMPLOYEE ---
 elif choice == "Add New Employee":
     st.subheader("📝 Registration Form")
-    with st.form("add_form"):
-        name = st.text_input("Employee Name")
+    
+    # Placeholder for the success message
+    message_place = st.empty()
+    
+    with st.form("add_form", clear_on_submit=True):
+        name = st.text_input("Full Name")
         cnic = st.text_input("CNIC Number")
         designation = st.selectbox("Designation", ["Teacher", "Principal", "office", "Admin Staff", "Security", "Other"])
         salary = st.number_input("Basic Salary", min_value=0)
@@ -111,23 +94,21 @@ elif choice == "Add New Employee":
 
         if submit:
             if name and cnic:
-                # SAFE ID GENERATION
+                # ID Logic
                 if not df.empty and "ID" in df.columns:
-                    try:
-                        # Find max numeric ID, ignore non-numeric stuff
-                        max_id = pd.to_numeric(df["ID"], errors='coerce').max()
-                        if pd.isna(max_id): next_id = 101
-                        else: next_id = int(max_id) + 1
-                    except:
-                        next_id = 101
+                    max_id = pd.to_numeric(df["ID"], errors='coerce').max()
+                    next_id = 101 if pd.isna(max_id) else int(max_id) + 1
                 else:
                     next_id = 101
                 
                 new_row = pd.DataFrame([{"ID": next_id, "Name": name, "CNIC": cnic, "Designation": designation, "Basic_Salary": salary}])
                 updated_df = pd.concat([df, new_row], ignore_index=True)
                 conn.update(data=updated_df)
-                st.success(f"✅ Saved! ID Assigned: {next_id}")
+                
+                # Show success message and balloons
+                message_place.success(f"✅ Successful! {name} has been added with ID: {next_id}")
                 st.balloons()
-                st.rerun()
+                time.sleep(2) # Wait a bit so you can read the message
+                st.cache_data.clear()
             else:
-                st.warning("Please fill all fields.")
+                st.warning("Please fill Name and CNIC fields.")
