@@ -52,28 +52,34 @@ if choice == "Dashboard":
                 st.session_state.edit_index = index
                 st.session_state.edit_data = row.to_dict()
             if btn_col2.button("🗑️", key=f"del_{index}"):
-                updated_df = df.drop(index)
-                conn.update(data=updated_df)
-                st.success("❌ Record Removed!")
-                st.cache_data.clear()
-                st.rerun()
+                with st.spinner("Removing record..."):
+                    updated_df = df.drop(index)
+                    conn.update(data=updated_df)
+                    st.cache_data.clear()
+                    st.rerun()
 
         if st.session_state.get("edit_mode"):
             st.divider()
             with st.form("edit_form"):
+                st.info(f"Editing: {st.session_state.edit_data.get('Name')}")
                 en_name = st.text_input("Name", value=st.session_state.edit_data.get('Name', ''))
                 en_cnic = st.text_input("CNIC", value=st.session_state.edit_data.get('CNIC', ''))
                 en_desig = st.selectbox("Designation", ["Teacher", "Principal", "office", "Admin Staff", "Security", "Other"], index=0)
                 en_sal = st.number_input("Salary", value=int(st.session_state.edit_data.get('Basic_Salary', 0)))
-                if st.form_submit_button("Update"):
-                    df.at[st.session_state.edit_index, "Name"] = en_name
-                    df.at[st.session_state.edit_index, "CNIC"] = en_cnic
-                    df.at[st.session_state.edit_index, "Designation"] = en_desig
-                    df.at[st.session_state.edit_index, "Basic_Salary"] = en_sal
-                    conn.update(data=df)
-                    st.success("✅ Updated!")
+                
+                c1, c2 = st.columns(2)
+                if c1.form_submit_button("Update"):
+                    with st.spinner("Updating..."):
+                        df.at[st.session_state.edit_index, "Name"] = en_name
+                        df.at[st.session_state.edit_index, "CNIC"] = en_cnic
+                        df.at[st.session_state.edit_index, "Designation"] = en_desig
+                        df.at[st.session_state.edit_index, "Basic_Salary"] = en_sal
+                        conn.update(data=df)
+                        st.session_state.edit_mode = False
+                        st.cache_data.clear()
+                        st.rerun()
+                if c2.form_submit_button("Cancel"):
                     st.session_state.edit_mode = False
-                    st.cache_data.clear()
                     st.rerun()
     else:
         st.info("No records found.")
@@ -81,9 +87,6 @@ if choice == "Dashboard":
 # --- ADD NEW EMPLOYEE ---
 elif choice == "Add New Employee":
     st.subheader("📝 Registration Form")
-    
-    # Placeholder for the success message
-    message_place = st.empty()
     
     with st.form("add_form", clear_on_submit=True):
         name = st.text_input("Full Name")
@@ -94,21 +97,20 @@ elif choice == "Add New Employee":
 
         if submit:
             if name and cnic:
-                # ID Logic
-                if not df.empty and "ID" in df.columns:
-                    max_id = pd.to_numeric(df["ID"], errors='coerce').max()
-                    next_id = 101 if pd.isna(max_id) else int(max_id) + 1
-                else:
-                    next_id = 101
-                
-                new_row = pd.DataFrame([{"ID": next_id, "Name": name, "CNIC": cnic, "Designation": designation, "Basic_Salary": salary}])
-                updated_df = pd.concat([df, new_row], ignore_index=True)
-                conn.update(data=updated_df)
-                
-                # Show success message and balloons
-                message_place.success(f"✅ Successful! {name} has been added with ID: {next_id}")
-                st.balloons()
-                time.sleep(2) # Wait a bit so you can read the message
-                st.cache_data.clear()
+                with st.spinner("Connecting to Cloud..."):
+                    # ID Logic
+                    if not df.empty and "ID" in df.columns:
+                        max_id = pd.to_numeric(df["ID"], errors='coerce').max()
+                        next_id = 101 if pd.isna(max_id) else int(max_id) + 1
+                    else:
+                        next_id = 101
+                    
+                    new_row = pd.DataFrame([{"ID": next_id, "Name": name, "CNIC": cnic, "Designation": designation, "Basic_Salary": salary}])
+                    updated_df = pd.concat([df, new_row], ignore_index=True)
+                    conn.update(data=updated_df)
+                    st.cache_data.clear()
+                    st.success(f"Record Saved Successfully. ID: {next_id}")
+                    time.sleep(1)
+                    st.rerun()
             else:
-                st.warning("Please fill Name and CNIC fields.")
+                st.warning("Please fill all required fields.")
