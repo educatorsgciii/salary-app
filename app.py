@@ -17,7 +17,6 @@ st.markdown("""
     .salary-slip {
         border: 2px solid #ff4b4b; padding: 30px; border-radius: 15px;
         background-color: white; color: black; max-width: 600px; margin: auto;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -30,87 +29,90 @@ sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=cs
 
 if 'df' not in st.session_state:
     try:
-        st.session_state.df = pd.read_csv(sheet_url).dropna(how="all")
-        st.session_state.df.columns = st.session_state.df.columns.str.strip()
+        raw_df = pd.read_csv(sheet_url).dropna(how="all")
+        raw_df.columns = raw_df.columns.str.strip()
+        # ID اور تنخواہ کو صاف کرنا
+        if 'ID' in raw_df.columns:
+            raw_df['ID'] = raw_df['ID'].astype(str).str.replace('.0', '', regex=False)
+        st.session_state.df = raw_df
     except:
         st.error("شیٹ لوڈ نہیں ہو سکی۔")
 
 df = st.session_state.df
 
-# --- ایڈٹ فارم (سائیڈ بار) ---
+# --- ایڈٹ فارم (سائیڈ بار) میں تفصیلات لانا ---
 if 'editing_index' in st.session_state:
     idx = st.session_state.editing_index
-    row = df.loc[idx]
-    st.sidebar.subheader(f"📝 Edit: {row['Name']}")
-    new_salary = st.sidebar.text_input("Salary", str(row.get('Salary', row.get('Basic_Salary', '0'))))
-    if st.sidebar.button("✅ Update Record"):
-        st.session_state.df.at[idx, 'Salary'] = new_salary
-        del st.session_state.editing_index
-        st.rerun()
+    if idx in df.index:
+        row = df.loc[idx]
+        st.sidebar.subheader(f"📝 Edit: {row.get('Name', 'Unknown')}")
+        
+        # یہاں ہم یقینی بنا رہے ہیں کہ پرانی قیمتیں نظر آئیں
+        old_salary = str(row.get('Salary', row.get('Basic_Salary', '0')))
+        if old_salary == 'nan': old_salary = "0"
+            
+        new_salary = st.sidebar.text_input("New Salary Amount:", value=old_salary)
+        
+        if st.sidebar.button("✅ Update Now"):
+            st.session_state.df.at[idx, 'Salary'] = new_salary
+            st.session_state.df.at[idx, 'Basic_Salary'] = new_salary # دونوں کالمز اپ ڈیٹ کریں
+            del st.session_state.editing_index
+            st.rerun()
+        
+        if st.sidebar.button("❌ Cancel"):
+            del st.session_state.editing_index
+            st.rerun()
 
 # --- ریکارڈ ٹیبل ---
 st.subheader("📊 Employee Records")
 h = st.columns([1, 2, 2, 2, 1, 1])
-headers = ["ID", "Name", "Designation", "Salary", "Edit", "Del"]
-for i, head in enumerate(headers): h[i].write(f"**{head}**")
+for i, head in enumerate(["ID", "Name", "Designation", "Salary", "Edit", "Del"]):
+    h[i].write(f"**{head}**")
 
 st.divider()
 
 for index, row in df.iterrows():
     c = st.columns([1, 2, 2, 2, 1, 1])
-    # ID کو صاف دکھانا (102.0 کے بجائے 102)
-    emp_id = str(row['ID']).replace('.0', '')
-    c[0].write(emp_id)
-    c[1].write(row['Name'])
-    c[2].write(row['Designation'])
-    # تنخواہ اگر nan ہو تو 0 دکھانا
-    salary_display = row.get('Salary', row.get('Basic_Salary', '0'))
-    c[3].write(salary_display if pd.notna(salary_display) else "0")
+    c[0].write(row.get('ID', '---'))
+    c[1].write(row.get('Name', '---'))
+    c[2].write(row.get('Designation', '---'))
     
-    if c[4].button("📝", key=f"e_{index}"):
+    # تنخواہ دکھانا
+    s_val = row.get('Salary', row.get('Basic_Salary', '0'))
+    c[3].write(s_val if pd.notna(s_val) else "0")
+    
+    if c[4].button("📝", key=f"edit_btn_{index}"):
         st.session_state.editing_index = index
         st.rerun()
-    if c[5].button("🗑️", key=f"d_{index}"):
+    if c[5].button("🗑️", key=f"del_btn_{index}"):
         st.session_state.df = df.drop(index)
         st.rerun()
 
-# --- سلپ سرچ (مسئلہ حل شدہ) ---
+# --- سیلری سلپ جنریٹر ---
 st.divider()
-st.subheader("🔍 Generate Salary Slip")
-search_id = st.text_input("ملازم کی ID لکھیں (مثال: 102):")
+st.subheader("🔍 Search & Generate Slip")
+search_id = st.text_input("ملازم کی ID لکھیں:")
 
 if search_id:
-    # سرچ کو بہتر بنایا تاکہ 102 اور 102.0 دونوں میچ ہوں
-    df['ID_str'] = df['ID'].astype(str).str.replace('.0', '', regex=False).str.strip()
-    matched = df[df['ID_str'] == str(search_id).strip()]
+    # سرچ کو مضبوط بنانا
+    matched = df[df['ID'].astype(str).str.strip() == str(search_id).strip()]
     
     if not matched.empty:
         emp = matched.iloc[0]
-        final_salary = emp.get('Salary', emp.get('Basic_Salary', '0'))
+        f_salary = emp.get('Salary', emp.get('Basic_Salary', '0'))
+        if pd.isna(f_salary): f_salary = "0"
         
         st.markdown(f"""
             <div class="salary-slip">
-                <div style="text-align: center;">
-                    <h2 style="color: #ff4b4b; margin:0;">THE EDUCATORS</h2>
-                    <p style="margin:0;">Gulshan Campus III</p>
-                    <hr>
-                    <h4 style="text-decoration: underline;">MONTHLY SALARY SLIP</h4>
-                </div>
-                <table style="width: 100%; margin-top: 20px;">
-                    <tr><td><b>Name:</b> {emp['Name']}</td><td style="text-align: right;"><b>ID:</b> {search_id}</td></tr>
-                    <tr><td><b>Designation:</b> {emp['Designation']}</td><td style="text-align: right;"><b>CNIC:</b> {emp.get('CNIC', '---')}</td></tr>
-                </table>
-                <div style="background: #fdf2f2; padding: 15px; margin-top: 20px; text-align: center; border-radius: 10px;">
-                    <span style="font-size: 20px; font-weight: bold;">Net Salary: PKR {final_salary}</span>
-                </div>
-                <div style="margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px;">
-                    <p style="border-top: 1px solid #000; width: 150px; text-align: center;">Accountant Signature</p>
-                    <p style="border-top: 1px solid #000; width: 150px; text-align: center;">Employee Signature</p>
+                <h2 style="text-align: center; color: #ff4b4b;">THE EDUCATORS</h2>
+                <p style="text-align: center;">Gulshan Campus III</p>
+                <hr>
+                <p><b>Employee Name:</b> {emp.get('Name', '---')}</p>
+                <p><b>ID:</b> {search_id} | <b>Designation:</b> {emp.get('Designation', '---')}</p>
+                <div style="background: #fdf2f2; padding: 15px; text-align: center; font-size: 20px;">
+                    <b>Total Salary: PKR {f_salary}</b>
                 </div>
             </div>
         """, unsafe_allow_html=True)
-        st.info("🖨️ پرنٹ کے لیے **Ctrl + P** دبائیں۔")
     else:
-        st.error("❌ اس ID کا کوئی ریکارڈ نہیں ملا۔")
-
-st.download_button("📥 Download Excel", data=df.to_csv(index=False).encode('utf-8'), file_name='Salary_Report.csv')
+        st.error("اس ID کا کوئی ملازم نہیں ملا۔")
