@@ -12,7 +12,6 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Fetch Data
 try:
-    # ttl="0" is important to get fresh data every time
     df = conn.read(ttl="0")
     df = df.dropna(how="all")
 except Exception as e:
@@ -20,14 +19,74 @@ except Exception as e:
     df = pd.DataFrame()
 
 # Sidebar Menu
-menu = ["Dashboard", "Add New Employee", "Delete Employee"]
+menu = ["Dashboard", "Add New Employee"]
 choice = st.sidebar.selectbox("Main Menu", menu)
 
 # --- DASHBOARD ---
 if choice == "Dashboard":
     st.subheader("📊 Employee Database")
+    
     if not df.empty:
-        st.dataframe(df, use_container_width=True)
+        # Header Row
+        h_cols = st.columns([3, 2, 2, 2])
+        h_cols[0].bold("Name")
+        h_cols[1].bold("Designation")
+        h_cols[2].bold("Salary")
+        h_cols[3].bold("Actions")
+        st.divider()
+
+        # Data Rows
+        for index, row in df.iterrows():
+            cols = st.columns([3, 2, 2, 2])
+            cols[0].write(row["Name"])
+            cols[1].write(row["Designation"])
+            cols[2].write(f"Rs. {row['Salary']}")
+            
+            # Action Buttons: Edit and Delete
+            btn_edit = cols[3].button("✏️", key=f"edit_{index}")
+            btn_del = cols[3].button("🗑️", key=f"del_{index}")
+
+            # If Edit is clicked
+            if btn_edit:
+                st.session_state.edit_mode = True
+                st.session_state.edit_index = index
+                st.session_state.edit_data = row.to_dict()
+
+            # If Delete is clicked
+            if btn_del:
+                updated_df = df.drop(index)
+                conn.update(data=updated_df)
+                st.success(f"❌ {row['Name']} removed!")
+                st.cache_data.clear()
+                st.rerun()
+
+        # Edit Form (appears only when pencil is clicked)
+        if st.session_state.get("edit_mode"):
+            st.divider()
+            st.subheader(f"🔄 Editing: {st.session_state.edit_data['Name']}")
+            with st.form("edit_form"):
+                new_name = st.text_input("Name", value=st.session_state.edit_data['Name'])
+                new_desig = st.selectbox("Designation", ["Teacher", "Principal", "Admin Staff", "Security", "Other"], 
+                                         index=["Teacher", "Principal", "Admin Staff", "Security", "Other"].index(st.session_state.edit_data['Designation']))
+                new_sal = st.number_input("Salary", value=int(st.session_state.edit_data['Salary']))
+                
+                c1, c2 = st.columns(2)
+                save = c1.form_submit_button("Update Records")
+                cancel = c2.form_submit_button("Cancel")
+
+                if save:
+                    df.at[st.session_state.edit_index, "Name"] = new_name
+                    df.at[st.session_state.edit_index, "Designation"] = new_desig
+                    df.at[st.session_state.edit_index, "Salary"] = new_sal
+                    conn.update(data=df)
+                    st.success("✅ Records Updated!")
+                    st.session_state.edit_mode = False
+                    st.cache_data.clear()
+                    st.rerun()
+                
+                if cancel:
+                    st.session_state.edit_mode = False
+                    st.rerun()
     else:
         st.info("No records found in the cloud.")
 
@@ -47,28 +106,6 @@ elif choice == "Add New Employee":
                 conn.update(data=updated_df)
                 st.success(f"✅ {name} has been saved!")
                 st.balloons()
+                st.rerun()
             else:
                 st.warning("Please enter a name.")
-
-# --- DELETE EMPLOYEE ---
-elif choice == "Delete Employee":
-    st.subheader("🗑️ Delete Records")
-    if not df.empty:
-        # Create a clean list of names
-        names_list = df["Name"].unique().tolist()
-        
-        # Add a placeholder so it doesn't auto-select the first name
-        names_list.insert(0, "Choose an employee...")
-        
-        selected_employee = st.selectbox("Which employee do you want to remove?", names_list)
-        
-        if selected_employee != "Choose an employee...":
-            st.warning(f"Are you sure you want to delete {selected_employee}?")
-            if st.button("Confirm Delete"):
-                # Remove the selected row
-                updated_df = df[df["Name"] != selected_employee]
-                conn.update(data=updated_df)
-                st.success(f"❌ {selected_employee} has been removed from cloud!")
-                st.cache_data.clear() # This clears the old data from memory
-    else:
-        st.info("No employees available to delete.")
