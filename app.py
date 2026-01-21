@@ -1,96 +1,118 @@
 import streamlit as st
 import pandas as pd
 
-# پیج سیٹ اپ
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
+
+# بٹنوں کو سادہ بنانے کے لیے CSS
+st.markdown("""
+    <style>
+    div.stButton > button {
+        border: none !important;
+        background-color: transparent !important;
+        color: inherit !important;
+        padding: 0px !important;
+        font-size: 20px !important;
+    }
+    div.stButton > button:hover { color: #ff4b4b !important; }
+    .salary-slip {
+        border: 2px solid #ff4b4b; padding: 30px; border-radius: 15px;
+        background-color: white; color: black; max-width: 600px; margin: auto;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 st.title("🏫 The Educators - Salary Management System")
 
-# گوگل شیٹ لنک
+# ڈیٹا لوڈ کرنا
 sheet_id = "13eYpH7tTx-SCDkCVRFzq5Ar7QXccXoLBIRfsmvufp3Y"
 sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
 
-try:
-    # ڈیٹا لوڈ کرنا
-    df = pd.read_csv(sheet_url)
-    df = df.dropna(how="all")
-    
-    # کالمز اور ڈیٹا کی صفائی
-    df.columns = df.columns.str.strip()
-    # ID کو نمبر سے ٹیکسٹ میں بدلنا تاکہ سرچ میں مسئلہ نہ ہو
-    if 'ID' in df.columns:
-        df['ID'] = df['ID'].astype(str).str.replace('.0', '', regex=False).str.strip()
+if 'df' not in st.session_state:
+    try:
+        raw_df = pd.read_csv(sheet_url).dropna(how="all")
+        raw_df.columns = raw_df.columns.str.strip()
+        # ID اور تنخواہ کو صاف کرنا
+        if 'ID' in raw_df.columns:
+            raw_df['ID'] = raw_df['ID'].astype(str).str.replace('.0', '', regex=False)
+        st.session_state.df = raw_df
+    except:
+        st.error("شیٹ لوڈ نہیں ہو سکی۔")
 
-    st.success("✅ سسٹم کامیابی سے اپ ڈیٹ ہو گیا ہے!")
+df = st.session_state.df
 
-    # --- حصہ 1: مین ڈیٹا ٹیبل (ایڈٹ اور ڈیلیٹ کے لیے) ---
-    st.subheader("📊 Employee Database")
-    # اسٹریم لٹ کا نیا ڈیٹا ایڈیٹر جو ایڈٹ کی سہولت دیتا ہے
-    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
-    
-    st.divider()
-
-    # --- حصہ 2: سیلری سلپ سرچ ---
-    st.subheader("🔍 Search & Print Salary Slip")
-    search_query = st.text_input("ملازم کی ID لکھیں (مثال: 102)", placeholder="یہاں ID ٹائپ کریں اور Enter دبائیں...")
-
-    if search_query:
-        # سرچ کرنے کا عمل
-        matched_emp = df[df['ID'] == str(search_query).strip()]
+# --- ایڈٹ فارم (سائیڈ بار) میں تفصیلات لانا ---
+if 'editing_index' in st.session_state:
+    idx = st.session_state.editing_index
+    if idx in df.index:
+        row = df.loc[idx]
+        st.sidebar.subheader(f"📝 Edit: {row.get('Name', 'Unknown')}")
         
-        if not matched_emp.empty:
-            emp = matched_emp.iloc[0]
-            salary_val = emp.get('Salary', emp.get('Basic', '0'))
+        # یہاں ہم یقینی بنا رہے ہیں کہ پرانی قیمتیں نظر آئیں
+        old_salary = str(row.get('Salary', row.get('Basic_Salary', '0')))
+        if old_salary == 'nan': old_salary = "0"
             
-            # سلپ کا ڈیزائن (unsafe_allow_html=True کے ساتھ تاکہ کوڈ نہ دکھے)
-            slip_html = f"""
-            <div style="background-color: white; padding: 30px; border: 2px solid #ff4b4b; border-radius: 10px; color: #333; max-width: 700px; margin: auto;">
-                <div style="text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px;">
-                    <h1 style="color: #ff4b4b; margin: 0;">THE EDUCATORS</h1>
-                    <p style="margin: 5px 0;">Gulshan Campus III, Karachi</p>
-                    <b style="background: #fdf2f2; padding: 5px 15px; border-radius: 10px;">MONTHLY SALARY SLIP</b>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                    <div>
-                        <p><b>Name:</b> {emp.get('Name', 'N/A')}</p>
-                        <p><b>Designation:</b> {emp.get('Designation', 'N/A')}</p>
-                    </div>
-                    <div style="text-align: right;">
-                        <p><b>ID:</b> {emp.get('ID', 'N/A')}</p>
-                        <p><b>CNIC:</b> {emp.get('CNIC', 'N/A')}</p>
-                    </div>
-                </div>
-                <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
-                    <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-                        <th style="padding: 10px; text-align: left;">Description</th>
-                        <th style="padding: 10px; text-align: right;">Amount (PKR)</th>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border-bottom: 1px solid #eee;">Monthly Basic Salary</td>
-                        <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;">Rs. {salary_val}</td>
-                    </tr>
-                    <tr style="font-weight: bold; background: #fff5f5;">
-                        <td style="padding: 10px;">Total Net Payable</td>
-                        <td style="padding: 10px; text-align: right; color: #d32f2f;">Rs. {salary_val}</td>
-                    </tr>
-                </table>
-                <div style="margin-top: 40px; display: flex; justify-content: space-between;">
-                    <div style="border-top: 1px solid #333; width: 150px; text-align: center;">Accountant</div>
-                    <div style="border-top: 1px solid #333; width: 150px; text-align: center;">Employee</div>
+        new_salary = st.sidebar.text_input("New Salary Amount:", value=old_salary)
+        
+        if st.sidebar.button("✅ Update Now"):
+            st.session_state.df.at[idx, 'Salary'] = new_salary
+            st.session_state.df.at[idx, 'Basic_Salary'] = new_salary # دونوں کالمز اپ ڈیٹ کریں
+            del st.session_state.editing_index
+            st.rerun()
+        
+        if st.sidebar.button("❌ Cancel"):
+            del st.session_state.editing_index
+            st.rerun()
+
+# --- ریکارڈ ٹیبل ---
+st.subheader("📊 Employee Records")
+h = st.columns([1, 2, 2, 2, 1, 1])
+for i, head in enumerate(["ID", "Name", "Designation", "Salary", "Edit", "Del"]):
+    h[i].write(f"**{head}**")
+
+st.divider()
+
+for index, row in df.iterrows():
+    c = st.columns([1, 2, 2, 2, 1, 1])
+    c[0].write(row.get('ID', '---'))
+    c[1].write(row.get('Name', '---'))
+    c[2].write(row.get('Designation', '---'))
+    
+    # تنخواہ دکھانا
+    s_val = row.get('Salary', row.get('Basic_Salary', '0'))
+    c[3].write(s_val if pd.notna(s_val) else "0")
+    
+    if c[4].button("📝", key=f"edit_btn_{index}"):
+        st.session_state.editing_index = index
+        st.rerun()
+    if c[5].button("🗑️", key=f"del_btn_{index}"):
+        st.session_state.df = df.drop(index)
+        st.rerun()
+
+# --- سیلری سلپ جنریٹر ---
+st.divider()
+st.subheader("🔍 Search & Generate Slip")
+search_id = st.text_input("ملازم کی ID لکھیں:")
+
+if search_id:
+    # سرچ کو مضبوط بنانا
+    matched = df[df['ID'].astype(str).str.strip() == str(search_id).strip()]
+    
+    if not matched.empty:
+        emp = matched.iloc[0]
+        f_salary = emp.get('Salary', emp.get('Basic_Salary', '0'))
+        if pd.isna(f_salary): f_salary = "0"
+        
+        st.markdown(f"""
+            <div class="salary-slip">
+                <h2 style="text-align: center; color: #ff4b4b;">THE EDUCATORS</h2>
+                <p style="text-align: center;">Gulshan Campus III</p>
+                <hr>
+                <p><b>Employee Name:</b> {emp.get('Name', '---')}</p>
+                <p><b>ID:</b> {search_id} | <b>Designation:</b> {emp.get('Designation', '---')}</p>
+                <div style="background: #fdf2f2; padding: 15px; text-align: center; font-size: 20px;">
+                    <b>Total Salary: PKR {f_salary}</b>
                 </div>
             </div>
-            """
-            # یہاں ہم HTML کو رینڈر کر رہے ہیں تاکہ کوڈ کے بجائے ڈیزائن نظر آئے
-            st.markdown(slip_html, unsafe_allow_html=True)
-            st.info("💡 پرنٹ کے لیے **Ctrl + P** دبائیں۔")
-        else:
-            st.error("❌ اس ID کا کوئی ریکارڈ موجود نہیں ہے۔")
-
-    # ڈاؤن لوڈ بٹن
-    st.divider()
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download Excel Report", data=csv, file_name='Salary_Report.csv')
-
-except Exception as e:
-    st.error(f"Error: {e}")
-
+        """, unsafe_allow_html=True)
+    else:
+        st.error("اس ID کا کوئی ملازم نہیں ملا۔")
