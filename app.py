@@ -1,96 +1,104 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+import math
 
-# پیج سیٹ اپ
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
 
 st.title("🏫 The Educators - Salary Management System")
 
-# گوگل شیٹ لنک
-sheet_id = "13eYpH7tTx-SCDkCVRFzq5Ar7QXccXoLBIRfsmvufp3Y"
-sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-
+# گوگل شیٹ کنکشن
 try:
-    # ڈیٹا لوڈ کرنا
-    df = pd.read_csv(sheet_url)
-    df = df.dropna(how="all")
-    
-    # کالمز اور ڈیٹا کی صفائی
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read(ttl="0").dropna(how="all")
     df.columns = df.columns.str.strip()
-    # ID کو نمبر سے ٹیکسٹ میں بدلنا تاکہ سرچ میں مسئلہ نہ ہو
-    if 'ID' in df.columns:
-        df['ID'] = df['ID'].astype(str).str.replace('.0', '', regex=False).str.strip()
 
-    st.success("✅ سسٹم کامیابی سے اپ ڈیٹ ہو گیا ہے!")
+    # ضروری کالمز اگر نہیں ہیں تو بنا دیں
+    required_cols = ['ID', 'Name', 'Designation', 'Basic_Salary', 'Presents', 'Absents', 'Lates', 'Half_Day', 'Advance', 'Net_Salary']
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = 0
 
-    # --- حصہ 1: مین ڈیٹا ٹیبل (ایڈٹ اور ڈیلیٹ کے لیے) ---
-    st.subheader("📊 Employee Database")
-    # اسٹریم لٹ کا نیا ڈیٹا ایڈیٹر جو ایڈٹ کی سہولت دیتا ہے
-    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
-    
-    st.divider()
+    if 'main_df' not in st.session_state:
+        st.session_state.main_df = df
 
-    # --- حصہ 2: سیلری سلپ سرچ ---
-    st.subheader("🔍 Search & Print Salary Slip")
-    search_query = st.text_input("ملازم کی ID لکھیں (مثال: 102)", placeholder="یہاں ID ٹائپ کریں اور Enter دبائیں...")
-
-    if search_query:
-        # سرچ کرنے کا عمل
-        matched_emp = df[df['ID'] == str(search_query).strip()]
+    # --- حصہ 1: نئی انٹری (Add New Employee) ---
+    with st.expander("➕ Add New Employee"):
+        col1, col2, col3 = st.columns(3)
+        new_name = col1.text_input("Name")
+        new_desig = col2.text_input("Designation")
+        new_basic = col3.number_input("Basic Salary", min_value=0)
         
-        if not matched_emp.empty:
-            emp = matched_emp.iloc[0]
-            salary_val = emp.get('Salary', emp.get('Basic', '0'))
+        if st.button("Register Employee"):
+            # خودکار ID جنریٹ کرنا (آخری ID میں 1 پلس کرنا)
+            last_id = 100
+            if not st.session_state.main_df.empty:
+                try:
+                    last_id = int(float(st.session_state.main_df['ID'].max()))
+                except: last_id = 100
             
-            # سلپ کا ڈیزائن (unsafe_allow_html=True کے ساتھ تاکہ کوڈ نہ دکھے)
-            slip_html = f"""
-            <div style="background-color: white; padding: 30px; border: 2px solid #ff4b4b; border-radius: 10px; color: #333; max-width: 700px; margin: auto;">
-                <div style="text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px;">
-                    <h1 style="color: #ff4b4b; margin: 0;">THE EDUCATORS</h1>
-                    <p style="margin: 5px 0;">Gulshan Campus III, Karachi</p>
-                    <b style="background: #fdf2f2; padding: 5px 15px; border-radius: 10px;">MONTHLY SALARY SLIP</b>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                    <div>
-                        <p><b>Name:</b> {emp.get('Name', 'N/A')}</p>
-                        <p><b>Designation:</b> {emp.get('Designation', 'N/A')}</p>
-                    </div>
-                    <div style="text-align: right;">
-                        <p><b>ID:</b> {emp.get('ID', 'N/A')}</p>
-                        <p><b>CNIC:</b> {emp.get('CNIC', 'N/A')}</p>
-                    </div>
-                </div>
-                <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
-                    <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-                        <th style="padding: 10px; text-align: left;">Description</th>
-                        <th style="padding: 10px; text-align: right;">Amount (PKR)</th>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border-bottom: 1px solid #eee;">Monthly Basic Salary</td>
-                        <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;">Rs. {salary_val}</td>
-                    </tr>
-                    <tr style="font-weight: bold; background: #fff5f5;">
-                        <td style="padding: 10px;">Total Net Payable</td>
-                        <td style="padding: 10px; text-align: right; color: #d32f2f;">Rs. {salary_val}</td>
-                    </tr>
-                </table>
-                <div style="margin-top: 40px; display: flex; justify-content: space-between;">
-                    <div style="border-top: 1px solid #333; width: 150px; text-align: center;">Accountant</div>
-                    <div style="border-top: 1px solid #333; width: 150px; text-align: center;">Employee</div>
-                </div>
-            </div>
-            """
-            # یہاں ہم HTML کو رینڈر کر رہے ہیں تاکہ کوڈ کے بجائے ڈیزائن نظر آئے
-            st.markdown(slip_html, unsafe_allow_html=True)
-            st.info("💡 پرنٹ کے لیے **Ctrl + P** دبائیں۔")
-        else:
-            st.error("❌ اس ID کا کوئی ریکارڈ موجود نہیں ہے۔")
+            new_row = {
+                'ID': last_id + 1, 'Name': new_name, 'Designation': new_desig,
+                'Basic_Salary': new_basic, 'Presents': 0, 'Absents': 0, 
+                'Lates': 0, 'Half_Day': 0, 'Advance': 0, 'Net_Salary': 0
+            }
+            st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame([new_row])], ignore_index=True)
+            st.success(f"ملازم رجسٹر ہو گیا! ID: {last_id + 1}")
+            st.rerun()
 
-    # ڈاؤن لوڈ بٹن
+    # --- حصہ 2: حاضری اور حساب کتاب ---
+    st.subheader("📊 Attendance & Salary Calculation")
+    
+    # ڈیٹا ایڈیٹر (جہاں آپ حاضری ڈالیں گی)
+    edited_df = st.data_editor(st.session_state.main_df, use_container_width=True, num_rows="dynamic")
+
+    # حساب کتاب کا فارمولا (Calculations)
+    for index, row in edited_df.iterrows():
+        basic = float(row['Basic_Salary'])
+        per_day_sal = basic / 30 # ایک دن کی تنخواہ
+        
+        # 3 لایٹس پر ایک چھٹی
+        lates_off = math.floor(float(row['Lates']) / 3)
+        # 2 ہاف ڈیز پر ایک چھٹی
+        half_day_off = math.floor(float(row['Half_Day']) / 2)
+        
+        # کل کٹوتیاں (Absents + Lates Off + Half Day Off)
+        total_offs = float(row['Absents']) + lates_off + half_day_off
+        deduction = total_offs * per_day_sal
+        
+        # نیٹ سیلری (Basic - Deductions - Advance)
+        net = basic - deduction - float(row['Advance'])
+        edited_df.at[index, 'Net_Salary'] = round(net)
+
+    # سیو بٹن
+    if st.button("💾 SAVE ALL DATA TO GOOGLE SHEET"):
+        conn.update(data=edited_df)
+        st.session_state.main_df = edited_df
+        st.success("تمام حاضری اور حساب کتاب گوگل شیٹ میں سیو ہو گیا ہے!")
+        st.balloons()
+
     st.divider()
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download Excel Report", data=csv, file_name='Salary_Report.csv')
+
+    # --- حصہ 3: سرچ اور سیلری سلپ ---
+    st.subheader("🔍 Generate Salary Slip")
+    search_id = st.text_input("ملازم کی ID لکھیں:")
+    if search_id:
+        match = edited_df[edited_df['ID'].astype(str).str.contains(str(search_id))]
+        if not match.empty:
+            emp = match.iloc[0]
+            st.markdown(f"""
+                <div style="border: 2px solid #ff4b4b; padding: 20px; border-radius: 15px; background-color: white; color: black; max-width: 600px; margin: auto;">
+                    <h2 style="text-align: center; color: #ff4b4b;">THE EDUCATORS</h2>
+                    <hr>
+                    <p><b>Name:</b> {emp['Name']} | <b>ID:</b> {emp['ID']}</p>
+                    <p><b>Designation:</b> {emp['Designation']}</p>
+                    <p><b>Lates:</b> {emp['Lates']} (Deducted: {math.floor(float(emp['Lates'])/3)} days)</p>
+                    <p><b>Half Days:</b> {emp['Half_Day']} (Deducted: {math.floor(float(emp['Half_Day'])/2)} days)</p>
+                    <p><b>Advance:</b> Rs. {emp['Advance']}</p>
+                    <h3 style="background: #fdf2f2; padding: 10px; text-align: center;">Net Payable: PKR {emp['Net_Salary']}</h3>
+                </div>
+            """, unsafe_allow_html=True)
 
 except Exception as e:
-    st.error(f"Error: {e}")
-
+    st.error("کنکشن کا مسئلہ: براہِ کرم چیک کریں کہ گوگل شیٹ Editor پر شیئر ہے۔")
+    st.info(f"Error: {e}")
