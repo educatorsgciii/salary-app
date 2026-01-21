@@ -6,51 +6,61 @@ import time
 # Page Configuration
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
 
-# --- CUSTOM CSS FOR MINIMALIST LOOK ---
+# --- CUSTOM CSS FOR DARK SIDEBAR & CLEAN ICONS ---
 st.markdown("""
     <style>
-    /* 1. Sidebar Light Grey Background */
+    /* 1. Dark Sidebar Background */
     [data-testid="stSidebar"] {
-        background-color: #F0F2F6 !important;
+        background-color: #111827 !important; /* Dark Grey/Blue */
     }
     
-    /* Sidebar buttons styling */
+    /* 2. Sidebar Icons and Text Color */
+    [data-testid="stSidebar"] section[flex-direction="column"] {
+        color: white !important;
+    }
+
+    /* Sidebar Buttons Styling */
     .stSidebar div.stButton > button {
         width: 100%;
         border-radius: 8px;
-        height: 3em;
-        background-color: #1E3A8A;
+        height: 3.5em;
+        background-color: #1E3A8A; /* Professional Blue */
         color: white;
         font-weight: bold;
         border: none;
+        margin-bottom: 10px;
+    }
+    
+    .stSidebar div.stButton > button:hover {
+        background-color: #3B82F6;
+        color: white;
     }
 
-    /* 2. Transparent Action Buttons (No Box, No Border) */
+    /* 3. Transparent Action Icons (No Box, No Border) */
     .stButton > button {
         border: none !important;
         background-color: transparent !important;
         box-shadow: none !important;
-        color: inherit !important;
+        color: #4B5563 !important; /* Grey color for icons */
         padding: 0px !important;
-        font-size: 18px !important;
+        font-size: 20px !important;
         height: auto !important;
         width: auto !important;
+        transition: 0.2s;
     }
     
-    /* Hover effect for icons only */
     .stButton > button:hover {
-        transform: scale(1.2);
-        background-color: transparent !important;
-        color: #3B82F6 !important;
+        transform: scale(1.3);
+        color: #ef4444 !important; /* Red on hover for delete/edit */
     }
 
-    /* Professional Table Header */
+    /* Table Header Styling */
     .header-style {
         font-size: 16px;
         font-weight: bold;
         color: #1E3A8A;
-        border-bottom: 2px solid #D1D5DB;
-        padding-bottom: 5px;
+        border-bottom: 2px solid #E5E7EB;
+        padding-bottom: 8px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -68,22 +78,24 @@ except Exception as e:
     st.error(f"Error reading data: {e}")
     df = pd.DataFrame()
 
-# --- SIDEBAR ---
+# --- SIDEBAR NAVIGATION ---
 if 'page' not in st.session_state:
     st.session_state.page = "Dashboard"
 
-st.sidebar.markdown("### 🛠️ Control Panel")
+st.sidebar.markdown("<h2 style='color: white; text-align: center;'>Menu</h2>", unsafe_allow_html=True)
 if st.sidebar.button("📊 VIEW DASHBOARD"):
     st.session_state.page = "Dashboard"
 if st.sidebar.button("➕ ADD NEW EMPLOYEE"):
     st.session_state.page = "Add New Employee"
 
-# --- DASHBOARD ---
+st.sidebar.divider()
+st.sidebar.markdown(f"<p style='color: #9CA3AF; text-align: center;'>Active: {st.session_state.page}</p>", unsafe_allow_html=True)
+
+# --- DASHBOARD PAGE ---
 if st.session_state.page == "Dashboard":
     st.subheader("📊 Employee Database")
     
     if not df.empty:
-        # Table Layout
         h_cols = st.columns([0.6, 2, 2, 2, 1.5, 1.2])
         headers = ["ID", "Name", "CNIC", "Designation", "Salary", "Actions"]
         for i, h in enumerate(headers):
@@ -98,7 +110,6 @@ if st.session_state.page == "Dashboard":
             sal = row.get("Basic_Salary", row.get("Salary", 0))
             cols[4].write(f"Rs. {sal}")
             
-            # Action Icons without Boxes
             btn_col1, btn_col2 = cols[5].columns(2)
             if btn_col1.button("✏️", key=f"ed_{index}"):
                 st.session_state.edit_mode = True
@@ -111,7 +122,6 @@ if st.session_state.page == "Dashboard":
                     st.cache_data.clear()
                     st.rerun()
 
-        # Edit Mode (Same as before)
         if st.session_state.get("edit_mode"):
             st.info(f"Editing: {st.session_state.edit_data.get('Name')}")
             with st.form("edit_form"):
@@ -136,7 +146,7 @@ if st.session_state.page == "Dashboard":
     else:
         st.info("No records found.")
 
-# --- ADD NEW EMPLOYEE ---
+# --- ADD NEW EMPLOYEE PAGE ---
 elif st.session_state.page == "Add New Employee":
     st.subheader("📝 Registration Form")
     with st.form("add_form", clear_on_submit=True):
@@ -147,7 +157,6 @@ elif st.session_state.page == "Add New Employee":
         submit = st.form_submit_button("Save Record")
 
         if submit and name and cnic:
-            # ID Logic
             if not df.empty and "ID" in df.columns:
                 max_id = pd.to_numeric(df["ID"], errors='coerce').max()
                 next_id = 101 if pd.isna(max_id) else int(max_id) + 1
@@ -157,6 +166,6 @@ elif st.session_state.page == "Add New Employee":
             updated_df = pd.concat([df, new_row], ignore_index=True)
             conn.update(data=updated_df)
             st.cache_data.clear()
-            st.success(f"Record Saved! ID: {next_id}")
+            st.success(f"Saved! ID: {next_id}")
             time.sleep(1)
             st.rerun()
