@@ -1,13 +1,14 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 
 st.title("🏫 The Educators Salary Record")
 
-# کنکشن بنانے کی کوشش
+# اپنی گوگل شیٹ کا پبلک لنک یہاں ڈالیں
+sheet_url = "https://docs.google.com/spreadsheets/d/آپ_کی_شیٹ_کا_آئی_ڈی/export?format=csv"
+
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read()
+    df = pd.read_csv(sheet_url)
     st.write("### آپ کا تمام ریکارڈ نیچے موجود ہے:")
-    st.dataframe(df) # سادہ ٹیبل میں ڈیٹا دکھانا
+    st.dataframe(df)
 except Exception as e:
-    st.error(f"کنکشن میں مسئلہ ہے، براہ کرم پیج ریفریش کریں یا requirements چیک کریں۔")
+    st.error("براہ کرم گوگل شیٹ کا لنک چیک کریں یا اسے 'Anyone with the link' پر شیئر کریں۔")
