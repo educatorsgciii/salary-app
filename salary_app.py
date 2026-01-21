@@ -6,19 +6,38 @@ import time
 # Page Configuration
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
 
-# Custom CSS to make sidebar buttons look professional
+# --- PROFESSIONAL COLORFUL SIDEBAR CSS ---
 st.markdown("""
     <style>
+    /* Sidebar background color */
+    [data-testid="stSidebar"] {
+        background-color: #f8f9fa;
+    }
+    
+    /* Sidebar buttons style */
     div.stButton > button:first-child {
         width: 100%;
-        border-radius: 5px;
-        height: 3em;
-        background-color: #f0f2f6;
-        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        height: 3.5em;
+        background-color: #1E3A8A; /* Dark Blue */
+        color: white; /* Text color */
+        font-size: 18px;
+        font-weight: bold;
+        border: none;
+        margin-bottom: 10px;
+        transition: 0.3s;
     }
+    
+    /* Hover effect */
     div.stButton > button:hover {
-        background-color: #e2e8f0;
-        border: 1px solid #3b82f6;
+        background-color: #3B82F6; /* Bright Blue on hover */
+        color: white;
+        border: none;
+    }
+    
+    /* Active button indicator */
+    .st-emotion-cache-1cvow48 {
+        margin-top: 20px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -36,25 +55,25 @@ except Exception as e:
     st.error(f"Error reading data: {e}")
     df = pd.DataFrame()
 
-# --- SIDEBAR NAVIGATION (With Buttons instead of Dropdown) ---
-st.sidebar.title("Main Menu")
+# --- SIDEBAR NAVIGATION ---
+st.sidebar.markdown("### 🛠️ Control Panel")
 
-# Initialize page state
 if 'page' not in st.session_state:
     st.session_state.page = "Dashboard"
 
-if st.sidebar.button("📊 Dashboard"):
+# Dashboard Button
+if st.sidebar.button("📊 VIEW DASHBOARD"):
     st.session_state.page = "Dashboard"
 
-if st.sidebar.button("📝 Add New Employee"):
+# Add Employee Button
+if st.sidebar.button("➕ ADD NEW EMPLOYEE"):
     st.session_state.page = "Add New Employee"
 
-# Current Selection Display (Optional)
-st.sidebar.markdown(f"**Currently on:** {st.session_state.page}")
+st.sidebar.divider()
+st.sidebar.write(f"📍 Active: **{st.session_state.page}**")
 
 # --- PAGE LOGIC ---
 
-# --- DASHBOARD ---
 if st.session_state.page == "Dashboard":
     st.subheader("📊 Employee Database")
     
@@ -83,7 +102,7 @@ if st.session_state.page == "Dashboard":
                 st.session_state.edit_index = index
                 st.session_state.edit_data = row.to_dict()
             if btn_col2.button("🗑️", key=f"del_{index}"):
-                with st.spinner("Removing..."):
+                with st.spinner("Deleting..."):
                     updated_df = df.drop(index)
                     conn.update(data=updated_df)
                     st.cache_data.clear()
@@ -100,7 +119,7 @@ if st.session_state.page == "Dashboard":
                 
                 c1, c2 = st.columns(2)
                 if c1.form_submit_button("Update"):
-                    with st.spinner("Updating..."):
+                    with st.spinner("Saving..."):
                         df.at[st.session_state.edit_index, "Name"] = en_name
                         df.at[st.session_state.edit_index, "CNIC"] = en_cnic
                         df.at[st.session_state.edit_index, "Designation"] = en_desig
@@ -115,10 +134,8 @@ if st.session_state.page == "Dashboard":
     else:
         st.info("No records found.")
 
-# --- ADD NEW EMPLOYEE ---
 elif st.session_state.page == "Add New Employee":
     st.subheader("📝 Registration Form")
-    
     with st.form("add_form", clear_on_submit=True):
         name = st.text_input("Full Name")
         cnic = st.text_input("CNIC Number")
@@ -128,7 +145,7 @@ elif st.session_state.page == "Add New Employee":
 
         if submit:
             if name and cnic:
-                with st.spinner("Saving..."):
+                with st.spinner("Connecting to Cloud..."):
                     if not df.empty and "ID" in df.columns:
                         max_id = pd.to_numeric(df["ID"], errors='coerce').max()
                         next_id = 101 if pd.isna(max_id) else int(max_id) + 1
@@ -139,8 +156,8 @@ elif st.session_state.page == "Add New Employee":
                     updated_df = pd.concat([df, new_row], ignore_index=True)
                     conn.update(data=updated_df)
                     st.cache_data.clear()
-                    st.success(f"Record Saved! ID: {next_id}")
+                    st.success(f"Saved Successfully! ID: {next_id}")
                     time.sleep(1)
                     st.rerun()
             else:
-                st.warning("Please fill Name and CNIC.")
+                st.warning("Required: Name & CNIC")
