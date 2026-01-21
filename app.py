@@ -15,89 +15,81 @@ try:
     df = pd.read_csv(sheet_url)
     df = df.dropna(how="all")
     
-    # ڈیٹا کی صفائی (تاکہ سرچ میں مسئلہ نہ ہو)
+    # کالمز اور ڈیٹا کی صفائی
     df.columns = df.columns.str.strip()
-    df['ID'] = df['ID'].astype(str).str.strip().str.replace('.0', '', regex=False)
-    
-    st.success("✅ ڈیٹا کامیابی سے اپ ڈیٹ ہو گیا ہے!")
-    
-    # ملازمین کا ریکارڈ دکھانا
-    with st.expander("📊 تمام ملازمین کا ریکارڈ دیکھیں"):
-        st.dataframe(df, use_container_width=True)
+    # ID کو نمبر سے ٹیکسٹ میں بدلنا تاکہ سرچ میں مسئلہ نہ ہو
+    if 'ID' in df.columns:
+        df['ID'] = df['ID'].astype(str).str.replace('.0', '', regex=False).str.strip()
+
+    st.success("✅ سسٹم کامیابی سے اپ ڈیٹ ہو گیا ہے!")
+
+    # --- حصہ 1: مین ڈیٹا ٹیبل (ایڈٹ اور ڈیلیٹ کے لیے) ---
+    st.subheader("📊 Employee Database")
+    # اسٹریم لٹ کا نیا ڈیٹا ایڈیٹر جو ایڈٹ کی سہولت دیتا ہے
+    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
     
     st.divider()
-    st.subheader("🔍 Search Employee & Print Salary Slip")
 
-    # سرچ کے لیے ان پٹ
-    search_query = st.text_input("ملازم کی ID لکھیں (مثال: 104)", placeholder="یہاں ID ٹائپ کریں...")
+    # --- حصہ 2: سیلری سلپ سرچ ---
+    st.subheader("🔍 Search & Print Salary Slip")
+    search_query = st.text_input("ملازم کی ID لکھیں (مثال: 102)", placeholder="یہاں ID ٹائپ کریں اور Enter دبائیں...")
 
     if search_query:
-        # سرچ کرنے کا بہتر طریقہ
+        # سرچ کرنے کا عمل
         matched_emp = df[df['ID'] == str(search_query).strip()]
         
         if not matched_emp.empty:
-            emp_data = matched_emp.iloc[0]
+            emp = matched_emp.iloc[0]
+            salary_val = emp.get('Salary', emp.get('Basic', '0'))
             
-            # سلپ کا پروفیشنل ڈیزائن
+            # سلپ کا ڈیزائن (unsafe_allow_html=True کے ساتھ تاکہ کوڈ نہ دکھے)
             slip_html = f"""
-            <div style="background-color: white; padding: 30px; border: 2px solid #ff4b4b; border-radius: 10px; max-width: 800px; margin: auto; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333;">
-                <div style="text-align: center; border-bottom: 2px solid #eee; padding-bottom: 15px;">
+            <div style="background-color: white; padding: 30px; border: 2px solid #ff4b4b; border-radius: 10px; color: #333; max-width: 700px; margin: auto;">
+                <div style="text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px;">
                     <h1 style="color: #ff4b4b; margin: 0;">THE EDUCATORS</h1>
-                    <p style="margin: 5px 0; color: #666;">Gulshan Campus III, Karachi</p>
-                    <div style="background: #fdf2f2; display: inline-block; padding: 5px 30px; border-radius: 20px; font-weight: bold; margin-top: 10px;">MONTHLY SALARY SLIP</div>
+                    <p style="margin: 5px 0;">Gulshan Campus III, Karachi</p>
+                    <b style="background: #fdf2f2; padding: 5px 15px; border-radius: 10px;">MONTHLY SALARY SLIP</b>
                 </div>
-                
-                <div style="display: flex; justify-content: space-between; margin-top: 25px;">
-                    <div style="line-height: 1.8;">
-                        <p><b>Employee Name:</b> {emp_data.get('Name', 'N/A')}</p>
-                        <p><b>Designation:</b> {emp_data.get('Designation', 'N/A')}</p>
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <div>
+                        <p><b>Name:</b> {emp.get('Name', 'N/A')}</p>
+                        <p><b>Designation:</b> {emp.get('Designation', 'N/A')}</p>
                     </div>
-                    <div style="text-align: right; line-height: 1.8;">
-                        <p><b>Employee ID:</b> <span style="color: #ff4b4b;">{emp_data.get('ID', 'N/A')}</span></p>
-                        <p><b>CNIC:</b> {emp_data.get('CNIC', 'N/A')}</p>
+                    <div style="text-align: right;">
+                        <p><b>ID:</b> {emp.get('ID', 'N/A')}</p>
+                        <p><b>CNIC:</b> {emp.get('CNIC', 'N/A')}</p>
                     </div>
                 </div>
-
-                <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                    <thead>
-                        <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-                            <th style="padding: 12px; text-align: left;">Description</th>
-                            <th style="padding: 12px; text-align: right;">Amount (PKR)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 15px;">Basic Salary / Total Monthly</td>
-                            <td style="padding: 15px; text-align: right; font-weight: bold;">Rs. {emp_data.get('Salary', '0')}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 15px;">Allowances / Bonus</td>
-                            <td style="padding: 15px; text-align: right;">Rs. 0</td>
-                        </tr>
-                    </tbody>
-                    <tfoot>
-                        <tr style="background-color: #fff5f5; font-size: 1.2em; font-weight: bold;">
-                            <td style="padding: 15px; border-top: 2px solid #ff4b4b;">Net Payable</td>
-                            <td style="padding: 15px; text-align: right; border-top: 2px solid #ff4b4b; color: #d32f2f;">Rs. {emp_data.get('Salary', '0')}</td>
-                        </tr>
-                    </tfoot>
+                <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+                    <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                        <th style="padding: 10px; text-align: left;">Description</th>
+                        <th style="padding: 10px; text-align: right;">Amount (PKR)</th>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;">Monthly Basic Salary</td>
+                        <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;">Rs. {salary_val}</td>
+                    </tr>
+                    <tr style="font-weight: bold; background: #fff5f5;">
+                        <td style="padding: 10px;">Total Net Payable</td>
+                        <td style="padding: 10px; text-align: right; color: #d32f2f;">Rs. {salary_val}</td>
+                    </tr>
                 </table>
-
-                <div style="margin-top: 50px; display: flex; justify-content: space-between;">
-                    <div style="text-align: center; border-top: 1px solid #999; width: 200px; padding-top: 5px;">Accountant Signature</div>
-                    <div style="text-align: center; border-top: 1px solid #999; width: 200px; padding-top: 5px;">Employee Signature</div>
+                <div style="margin-top: 40px; display: flex; justify-content: space-between;">
+                    <div style="border-top: 1px solid #333; width: 150px; text-align: center;">Accountant</div>
+                    <div style="border-top: 1px solid #333; width: 150px; text-align: center;">Employee</div>
                 </div>
             </div>
             """
+            # یہاں ہم HTML کو رینڈر کر رہے ہیں تاکہ کوڈ کے بجائے ڈیزائن نظر آئے
             st.markdown(slip_html, unsafe_allow_html=True)
-            st.info("🖨️ سلپ پرنٹ کرنے کے لیے **Ctrl + P** دبائیں اور اسے PDF کے طور پر محفوظ کر لیں۔")
+            st.info("💡 پرنٹ کے لیے **Ctrl + P** دبائیں۔")
         else:
-            st.error(f"❌ ID '{search_query}' کا کوئی ملازم نہیں ملا۔")
+            st.error("❌ اس ID کا کوئی ریکارڈ موجود نہیں ہے۔")
 
     # ڈاؤن لوڈ بٹن
     st.divider()
     csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download All Records (Excel)", data=csv, file_name='Salary_Report.csv', mime='text/csv')
+    st.download_button("📥 Download Excel Report", data=csv, file_name='Salary_Report.csv')
 
 except Exception as e:
     st.error(f"Error: {e}")
