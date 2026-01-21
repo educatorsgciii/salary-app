@@ -1,107 +1,96 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
+# پیج سیٹ اپ
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
-
-# بٹنوں کا ڈیزائن
-st.markdown("""
-    <style>
-    div.stButton > button { border: none !important; background-color: transparent !important; font-size: 20px !important; }
-    div.stButton > button:hover { color: #ff4b4b !important; }
-    .slip-box { border: 2px solid #ff4b4b; padding: 25px; border-radius: 15px; background-color: white; color: black; max-width: 600px; margin: auto; }
-    </style>
-    """, unsafe_allow_html=True)
 
 st.title("🏫 The Educators - Salary Management System")
 
-# گوگل شیٹ سے کنکشن (Secrets لازمی ہیں)
+# گوگل شیٹ لنک
+sheet_id = "13eYpH7tTx-SCDkCVRFzq5Ar7QXccXoLBIRfsmvufp3Y"
+sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    # ڈیٹا پڑھنا
-    df = conn.read(ttl="0").dropna(how="all")
+    # ڈیٹا لوڈ کرنا
+    df = pd.read_csv(sheet_url)
+    df = df.dropna(how="all")
+    
+    # کالمز اور ڈیٹا کی صفائی
     df.columns = df.columns.str.strip()
-    
-    # اگر سیشن میں ڈیٹا نہیں ہے تو لوڈ کریں
-    if 'main_df' not in st.session_state:
-        st.session_state.main_df = df
+    # ID کو نمبر سے ٹیکسٹ میں بدلنا تاکہ سرچ میں مسئلہ نہ ہو
+    if 'ID' in df.columns:
+        df['ID'] = df['ID'].astype(str).str.replace('.0', '', regex=False).str.strip()
 
-    working_df = st.session_state.main_df
+    st.success("✅ سسٹم کامیابی سے اپ ڈیٹ ہو گیا ہے!")
 
-    # --- ایڈٹ فنکشن ---
-    if 'edit_idx' in st.session_state:
-        idx = st.session_state.edit_idx
-        row = working_df.loc[idx]
-        st.sidebar.subheader(f"📝 Edit: {row.get('Name', 'Record')}")
-        
-        # تمام موجودہ کالمز کے لیے ان پٹ بنائیں
-        updated_data = {}
-        for col in working_df.columns:
-            updated_data[col] = st.sidebar.text_input(f"Change {col}", str(row[col]))
-        
-        if st.sidebar.button("✅ Update in App"):
-            for col, val in updated_data.items():
-                st.session_state.main_df.at[idx, col] = val
-            del st.session_state.edit_idx
-            st.rerun()
-
-    # --- مین ڈسپلے ---
+    # --- حصہ 1: مین ڈیٹا ٹیبل (ایڈٹ اور ڈیلیٹ کے لیے) ---
     st.subheader("📊 Employee Database")
+    # اسٹریم لٹ کا نیا ڈیٹا ایڈیٹر جو ایڈٹ کی سہولت دیتا ہے
+    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
     
-    # ہیڈرز
-    cols = st.columns(list(range(len(working_df.columns) + 2)))
-    for i, col_name in enumerate(working_df.columns):
-        cols[i].write(f"**{col_name}**")
-    cols[-2].write("**Edit**")
-    cols[-1].write("**Del**")
-
-    # ڈیٹا لائنز
-    for index, row in working_df.iterrows():
-        c = st.columns(list(range(len(working_df.columns) + 2)))
-        for i, col_name in enumerate(working_df.columns):
-            c[i].write(str(row[col_name]))
-        
-        if c[-2].button("📝", key=f"ed_{index}"):
-            st.session_state.edit_idx = index
-            st.rerun()
-        
-        if c[-1].button("🗑️", key=f"de_{index}"):
-            st.session_state.main_df = working_df.drop(index)
-            st.rerun()
-
     st.divider()
-    
-    # --- گوگل شیٹ میں سیو کرنے کا جادوئی بٹن ---
-    col_btn1, col_btn2 = st.columns(2)
-    if col_btn1.button("💾 SAVE ALL CHANGES TO GOOGLE SHEET"):
-        with st.spinner("گوگل شیٹ اپ ڈیٹ ہو رہی ہے..."):
-            conn.update(data=st.session_state.main_df)
-            st.success("✅ مبارک ہو! تمام تبدیلیاں گوگل شیٹ میں محفوظ ہو گئی ہیں۔")
-            st.balloons()
 
-    # --- سیلری سلپ سرچ ---
-    st.subheader("🔍 Generate Salary Slip")
-    search_id = st.text_input("ملازم کی ID لکھیں:")
-    if search_id:
-        # آئی ڈی کالم چیک کریں
-        id_col = 'ID' if 'ID' in working_df.columns else working_df.columns[0]
-        match = working_df[working_df[id_col].astype(str).str.contains(str(search_id))]
+    # --- حصہ 2: سیلری سلپ سرچ ---
+    st.subheader("🔍 Search & Print Salary Slip")
+    search_query = st.text_input("ملازم کی ID لکھیں (مثال: 102)", placeholder="یہاں ID ٹائپ کریں اور Enter دبائیں...")
+
+    if search_query:
+        # سرچ کرنے کا عمل
+        matched_emp = df[df['ID'] == str(search_query).strip()]
         
-        if not match.empty:
-            emp = match.iloc[0]
-            st.markdown(f"""
-                <div class="slip-box">
-                    <h2 style="text-align:center; color:#ff4b4b;">THE EDUCATORS</h2>
-                    <hr>
-                    <p><b>Name:</b> {emp.get('Name', '---')} | <b>Designation:</b> {emp.get('Designation', '---')}</p>
-                    <div style="background:#fdf2f2; padding:15px; text-align:center; font-size:20px;">
-                        <b>Net Salary: PKR {emp.get('Salary', emp.get('Basic', '0'))}</b>
+        if not matched_emp.empty:
+            emp = matched_emp.iloc[0]
+            salary_val = emp.get('Salary', emp.get('Basic', '0'))
+            
+            # سلپ کا ڈیزائن (unsafe_allow_html=True کے ساتھ تاکہ کوڈ نہ دکھے)
+            slip_html = f"""
+            <div style="background-color: white; padding: 30px; border: 2px solid #ff4b4b; border-radius: 10px; color: #333; max-width: 700px; margin: auto;">
+                <div style="text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+                    <h1 style="color: #ff4b4b; margin: 0;">THE EDUCATORS</h1>
+                    <p style="margin: 5px 0;">Gulshan Campus III, Karachi</p>
+                    <b style="background: #fdf2f2; padding: 5px 15px; border-radius: 10px;">MONTHLY SALARY SLIP</b>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <div>
+                        <p><b>Name:</b> {emp.get('Name', 'N/A')}</p>
+                        <p><b>Designation:</b> {emp.get('Designation', 'N/A')}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <p><b>ID:</b> {emp.get('ID', 'N/A')}</p>
+                        <p><b>CNIC:</b> {emp.get('CNIC', 'N/A')}</p>
                     </div>
                 </div>
-            """, unsafe_allow_html=True)
+                <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+                    <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                        <th style="padding: 10px; text-align: left;">Description</th>
+                        <th style="padding: 10px; text-align: right;">Amount (PKR)</th>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border-bottom: 1px solid #eee;">Monthly Basic Salary</td>
+                        <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee;">Rs. {salary_val}</td>
+                    </tr>
+                    <tr style="font-weight: bold; background: #fff5f5;">
+                        <td style="padding: 10px;">Total Net Payable</td>
+                        <td style="padding: 10px; text-align: right; color: #d32f2f;">Rs. {salary_val}</td>
+                    </tr>
+                </table>
+                <div style="margin-top: 40px; display: flex; justify-content: space-between;">
+                    <div style="border-top: 1px solid #333; width: 150px; text-align: center;">Accountant</div>
+                    <div style="border-top: 1px solid #333; width: 150px; text-align: center;">Employee</div>
+                </div>
+            </div>
+            """
+            # یہاں ہم HTML کو رینڈر کر رہے ہیں تاکہ کوڈ کے بجائے ڈیزائن نظر آئے
+            st.markdown(slip_html, unsafe_allow_html=True)
+            st.info("💡 پرنٹ کے لیے **Ctrl + P** دبائیں۔")
         else:
-            st.error("ریکارڈ نہیں ملا۔")
+            st.error("❌ اس ID کا کوئی ریکارڈ موجود نہیں ہے۔")
+
+    # ڈاؤن لوڈ بٹن
+    st.divider()
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Download Excel Report", data=csv, file_name='Salary_Report.csv')
 
 except Exception as e:
-    st.error("سسٹم کنکٹ نہیں ہو سکا۔ براہِ کرم چیک کریں کہ Secrets صحیح ہیں اور گوگل شیٹ Editor پر شیئر ہے۔")
-    st.info(f"Error details: {e}")
+    st.error(f"Error: {e}")
+
