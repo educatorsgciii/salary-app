@@ -4,66 +4,104 @@ import pandas as pd
 
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
 
+# بٹنوں کا ڈیزائن
+st.markdown("""
+    <style>
+    div.stButton > button { border: none !important; background-color: transparent !important; font-size: 20px !important; }
+    div.stButton > button:hover { color: #ff4b4b !important; }
+    .slip-box { border: 2px solid #ff4b4b; padding: 25px; border-radius: 15px; background-color: white; color: black; max-width: 600px; margin: auto; }
+    </style>
+    """, unsafe_allow_html=True)
+
 st.title("🏫 The Educators - Salary Management System")
 
-# کنکشن قائم کرنا
-conn = st.connection("gsheets", type=GSheetsConnection)
-
+# گوگل شیٹ سے کنکشن (Secrets لازمی ہیں)
 try:
-    # ڈیٹا پڑھنا (بغیر کسی ایرر کے)
-    df = conn.read(ttl="0")
-    df = df.dropna(how="all")
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # ڈیٹا پڑھنا
+    df = conn.read(ttl="0").dropna(how="all")
     df.columns = df.columns.str.strip()
-
-    # خودکار کالم مینجمنٹ: اگر ID کا کالم نہیں ہے تو اسے شامل کریں
-    if 'ID' not in df.columns:
-        st.warning("⚠️ آپ کی شیٹ میں 'ID' کا کالم نہیں تھا، میں نے اسے عارضی طور پر شامل کر دیا ہے۔")
-        df.insert(0, 'ID', range(101, 101 + len(df)))
-
+    
+    # اگر سیشن میں ڈیٹا نہیں ہے تو لوڈ کریں
     if 'main_df' not in st.session_state:
         st.session_state.main_df = df
 
-    st.success("✅ سسٹم کامیابی سے گوگل شیٹ سے منسلک ہے!")
+    working_df = st.session_state.main_df
 
-    # --- ڈیٹا ایڈیٹر (جہاں سے آپ ایڈٹ اور ڈیلیٹ کریں گی) ---
-    st.subheader("📊 ملازمین کا ریکارڈ (براہِ راست ایڈٹ کریں)")
-    st.info("💡 آپ کسی بھی خانے پر کلک کر کے اسے بدل سکتی ہیں اور نئی لائن بھی جوڑ سکتی ہیں۔")
+    # --- ایڈٹ فنکشن ---
+    if 'edit_idx' in st.session_state:
+        idx = st.session_state.edit_idx
+        row = working_df.loc[idx]
+        st.sidebar.subheader(f"📝 Edit: {row.get('Name', 'Record')}")
+        
+        # تمام موجودہ کالمز کے لیے ان پٹ بنائیں
+        updated_data = {}
+        for col in working_df.columns:
+            updated_data[col] = st.sidebar.text_input(f"Change {col}", str(row[col]))
+        
+        if st.sidebar.button("✅ Update in App"):
+            for col, val in updated_data.items():
+                st.session_state.main_df.at[idx, col] = val
+            del st.session_state.edit_idx
+            st.rerun()
+
+    # --- مین ڈسپلے ---
+    st.subheader("📊 Employee Database")
     
-    edited_df = st.data_editor(st.session_state.main_df, use_container_width=True, num_rows="dynamic")
+    # ہیڈرز
+    cols = st.columns(list(range(len(working_df.columns) + 2)))
+    for i, col_name in enumerate(working_df.columns):
+        cols[i].write(f"**{col_name}**")
+    cols[-2].write("**Edit**")
+    cols[-1].write("**Del**")
 
-    # جادوئی سیو بٹن
-    if st.button("💾 SAVE CHANGES TO GOOGLE SHEET"):
-        with st.spinner("ڈیٹا گوگل شیٹ میں محفوظ ہو رہا ہے..."):
-            conn.update(data=edited_df)
-            st.session_state.main_df = edited_df
-            st.success("🎉 زبردست! تمام تبدیلیاں اور نئے کالمز گوگل شیٹ میں اپ ڈیٹ ہو گئے ہیں۔")
-            st.balloons()
+    # ڈیٹا لائنز
+    for index, row in working_df.iterrows():
+        c = st.columns(list(range(len(working_df.columns) + 2)))
+        for i, col_name in enumerate(working_df.columns):
+            c[i].write(str(row[col_name]))
+        
+        if c[-2].button("📝", key=f"ed_{index}"):
+            st.session_state.edit_idx = index
+            st.rerun()
+        
+        if c[-1].button("🗑️", key=f"de_{index}"):
+            st.session_state.main_df = working_df.drop(index)
+            st.rerun()
 
     st.divider()
-
-    # --- سرچ اور سلپ جنریٹر ---
-    st.subheader("🔍 Search & Print Slip")
-    search_id = st.text_input("ملازم کی ID لکھیں:")
     
+    # --- گوگل شیٹ میں سیو کرنے کا جادوئی بٹن ---
+    col_btn1, col_btn2 = st.columns(2)
+    if col_btn1.button("💾 SAVE ALL CHANGES TO GOOGLE SHEET"):
+        with st.spinner("گوگل شیٹ اپ ڈیٹ ہو رہی ہے..."):
+            conn.update(data=st.session_state.main_df)
+            st.success("✅ مبارک ہو! تمام تبدیلیاں گوگل شیٹ میں محفوظ ہو گئی ہیں۔")
+            st.balloons()
+
+    # --- سیلری سلپ سرچ ---
+    st.subheader("🔍 Generate Salary Slip")
+    search_id = st.text_input("ملازم کی ID لکھیں:")
     if search_id:
-        # آئی ڈی میچ کرنا
-        match = edited_df[edited_df['ID'].astype(str).str.contains(str(search_id))]
+        # آئی ڈی کالم چیک کریں
+        id_col = 'ID' if 'ID' in working_df.columns else working_df.columns[0]
+        match = working_df[working_df[id_col].astype(str).str.contains(str(search_id))]
+        
         if not match.empty:
             emp = match.iloc[0]
             st.markdown(f"""
-                <div style="border: 2px solid #ff4b4b; padding: 25px; border-radius: 15px; background-color: white; color: black; max-width: 500px; margin: auto;">
-                    <h2 style="text-align: center; color: #ff4b4b;">THE EDUCATORS</h2>
-                    <p style="text-align: center;">Salary Slip</p>
+                <div class="slip-box">
+                    <h2 style="text-align:center; color:#ff4b4b;">THE EDUCATORS</h2>
                     <hr>
-                    <p><b>Name:</b> {emp.get('Name', '---')}</p>
-                    <p><b>ID:</b> {emp.get('ID', '---')}</p>
-                    <h3 style="color: green; text-align: center;">Net Salary: PKR {emp.get('Salary', emp.get('Basic', '0'))}</h3>
+                    <p><b>Name:</b> {emp.get('Name', '---')} | <b>Designation:</b> {emp.get('Designation', '---')}</p>
+                    <div style="background:#fdf2f2; padding:15px; text-align:center; font-size:20px;">
+                        <b>Net Salary: PKR {emp.get('Salary', emp.get('Basic', '0'))}</b>
+                    </div>
                 </div>
             """, unsafe_allow_html=True)
         else:
             st.error("ریکارڈ نہیں ملا۔")
 
 except Exception as e:
-    st.error("❌ کنکشن میں اب بھی مسئلہ ہے۔")
-    st.info(f"Technical Reason: {e}")
-    st.warning("مشورہ: Secrets میں 'private_key' کو دوبارہ کاپی پیسٹ کریں، شاید کوئی لفظ رہ گیا ہے۔")
+    st.error("سسٹم کنکٹ نہیں ہو سکا۔ براہِ کرم چیک کریں کہ Secrets صحیح ہیں اور گوگل شیٹ Editor پر شیئر ہے۔")
+    st.info(f"Error details: {e}")
