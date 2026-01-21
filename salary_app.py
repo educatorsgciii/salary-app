@@ -2,65 +2,36 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
+from io import BytesIO
 
 # Page Configuration
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
 
-# --- CUSTOM CSS FOR DARK SIDEBAR & CLEAN ICONS ---
+# --- CUSTOM CSS ---
 st.markdown("""
     <style>
-    /* 1. Dark Sidebar Background */
-    [data-testid="stSidebar"] {
-        background-color: #111827 !important; /* Dark Grey/Blue */
-    }
-    
-    /* 2. Sidebar Icons and Text Color */
-    [data-testid="stSidebar"] section[flex-direction="column"] {
-        color: white !important;
-    }
-
-    /* Sidebar Buttons Styling */
+    [data-testid="stSidebar"] { background-color: #111827 !important; }
     .stSidebar div.stButton > button {
-        width: 100%;
-        border-radius: 8px;
-        height: 3.5em;
-        background-color: #1E3A8A; /* Professional Blue */
-        color: white;
-        font-weight: bold;
-        border: none;
-        margin-bottom: 10px;
+        width: 100%; border-radius: 8px; height: 3.5em;
+        background-color: #1E3A8A; color: white; font-weight: bold; border: none;
     }
-    
-    .stSidebar div.stButton > button:hover {
-        background-color: #3B82F6;
-        color: white;
-    }
-
-    /* 3. Transparent Action Icons (No Box, No Border) */
     .stButton > button {
-        border: none !important;
-        background-color: transparent !important;
-        box-shadow: none !important;
-        color: #4B5563 !important; /* Grey color for icons */
-        padding: 0px !important;
-        font-size: 20px !important;
-        height: auto !important;
-        width: auto !important;
-        transition: 0.2s;
+        border: none !important; background-color: transparent !important;
+        color: #4B5563 !important; font-size: 20px !important; transition: 0.2s;
     }
-    
-    .stButton > button:hover {
-        transform: scale(1.3);
-        color: #ef4444 !important; /* Red on hover for delete/edit */
-    }
-
-    /* Table Header Styling */
+    .stButton > button:hover { transform: scale(1.3); color: #ef4444 !important; }
     .header-style {
-        font-size: 16px;
-        font-weight: bold;
-        color: #1E3A8A;
-        border-bottom: 2px solid #E5E7EB;
-        padding-bottom: 8px;
+        font-size: 16px; font-weight: bold; color: #1E3A8A;
+        border-bottom: 2px solid #E5E7EB; padding-bottom: 8px;
+    }
+    /* Download Button Styling */
+    .stDownloadButton > button {
+        background-color: #10b981 !important;
+        color: white !important;
+        border-radius: 5px !important;
+        padding: 5px 20px !important;
+        font-size: 14px !important;
+        border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -88,14 +59,25 @@ if st.sidebar.button("📊 VIEW DASHBOARD"):
 if st.sidebar.button("➕ ADD NEW EMPLOYEE"):
     st.session_state.page = "Add New Employee"
 
-st.sidebar.divider()
-st.sidebar.markdown(f"<p style='color: #9CA3AF; text-align: center;'>Active: {st.session_state.page}</p>", unsafe_allow_html=True)
-
 # --- DASHBOARD PAGE ---
 if st.session_state.page == "Dashboard":
-    st.subheader("📊 Employee Database")
+    col_title, col_download = st.columns([4, 1])
+    col_title.subheader("📊 Employee Database")
     
     if not df.empty:
+        # Excel Download Logic
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='Employees')
+        processed_data = output.getvalue()
+
+        col_download.download_button(
+            label="📥 Download Excel",
+            data=processed_data,
+            file_name="Educators_Employee_Record.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
         h_cols = st.columns([0.6, 2, 2, 2, 1.5, 1.2])
         headers = ["ID", "Name", "CNIC", "Designation", "Salary", "Actions"]
         for i, h in enumerate(headers):
