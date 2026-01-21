@@ -27,12 +27,12 @@ if choice == "Dashboard":
     st.subheader("📊 Employee Database")
     
     if not df.empty:
-        # Header Row
+        # Header Row using markdown for bold text
         h_cols = st.columns([3, 2, 2, 2])
-        h_cols[0].bold("Name")
-        h_cols[1].bold("Designation")
-        h_cols[2].bold("Salary")
-        h_cols[3].bold("Actions")
+        h_cols[0].markdown("**Name**")
+        h_cols[1].markdown("**Designation**")
+        h_cols[2].markdown("**Salary**")
+        h_cols[3].markdown("**Actions**")
         st.divider()
 
         # Data Rows
@@ -40,11 +40,14 @@ if choice == "Dashboard":
             cols = st.columns([3, 2, 2, 2])
             cols[0].write(row["Name"])
             cols[1].write(row["Designation"])
-            cols[2].write(f"Rs. {row['Salary']}")
+            # Display salary safely (checks if column is named Salary or Basic_Salary)
+            salary_val = row.get("Salary", row.get("Basic_Salary", 0))
+            cols[2].write(f"Rs. {salary_val}")
             
-            # Action Buttons: Edit and Delete
-            btn_edit = cols[3].button("✏️", key=f"edit_{index}")
-            btn_del = cols[3].button("🗑️", key=f"del_{index}")
+            # Action Buttons
+            btn_col1, btn_col2 = cols[3].columns(2)
+            btn_edit = btn_col1.button("✏️", key=f"edit_{index}")
+            btn_del = btn_col2.button("🗑️", key=f"del_{index}")
 
             # If Edit is clicked
             if btn_edit:
@@ -60,15 +63,23 @@ if choice == "Dashboard":
                 st.cache_data.clear()
                 st.rerun()
 
-        # Edit Form (appears only when pencil is clicked)
+        # Edit Form (appears below the table)
         if st.session_state.get("edit_mode"):
             st.divider()
             st.subheader(f"🔄 Editing: {st.session_state.edit_data['Name']}")
             with st.form("edit_form"):
                 new_name = st.text_input("Name", value=st.session_state.edit_data['Name'])
-                new_desig = st.selectbox("Designation", ["Teacher", "Principal", "Admin Staff", "Security", "Other"], 
-                                         index=["Teacher", "Principal", "Admin Staff", "Security", "Other"].index(st.session_state.edit_data['Designation']))
-                new_sal = st.number_input("Salary", value=int(st.session_state.edit_data['Salary']))
+                
+                # Check available designations
+                designations = ["Teacher", "Principal", "Admin Staff", "Security", "Other"]
+                current_desig = st.session_state.edit_data['Designation']
+                desig_index = designations.index(current_desig) if current_desig in designations else 0
+                
+                new_desig = st.selectbox("Designation", designations, index=desig_index)
+                
+                # Get current salary
+                current_sal = int(st.session_state.edit_data.get('Salary', st.session_state.edit_data.get('Basic_Salary', 0)))
+                new_sal = st.number_input("Salary", value=current_sal)
                 
                 c1, c2 = st.columns(2)
                 save = c1.form_submit_button("Update Records")
@@ -77,7 +88,13 @@ if choice == "Dashboard":
                 if save:
                     df.at[st.session_state.edit_index, "Name"] = new_name
                     df.at[st.session_state.edit_index, "Designation"] = new_desig
-                    df.at[st.session_state.edit_index, "Salary"] = new_sal
+                    
+                    # Update salary in whichever column it exists
+                    if "Salary" in df.columns:
+                        df.at[st.session_state.edit_index, "Salary"] = new_sal
+                    if "Basic_Salary" in df.columns:
+                        df.at[st.session_state.edit_index, "Basic_Salary"] = new_sal
+                    
                     conn.update(data=df)
                     st.success("✅ Records Updated!")
                     st.session_state.edit_mode = False
@@ -101,7 +118,8 @@ elif choice == "Add New Employee":
 
         if submit:
             if name:
-                new_data = pd.DataFrame([{"Name": name, "Designation": designation, "Salary": salary}])
+                # We save it under both names just to be safe with your sheet structure
+                new_data = pd.DataFrame([{"Name": name, "Designation": designation, "Salary": salary, "Basic_Salary": salary}])
                 updated_df = pd.concat([df, new_data], ignore_index=True)
                 conn.update(data=updated_df)
                 st.success(f"✅ {name} has been saved!")
