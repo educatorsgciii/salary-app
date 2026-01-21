@@ -12,6 +12,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Fetch Data
 try:
+    # ttl="0" is important to get fresh data every time
     df = conn.read(ttl="0")
     df = df.dropna(how="all")
 except Exception as e:
@@ -44,7 +45,7 @@ elif choice == "Add New Employee":
                 new_data = pd.DataFrame([{"Name": name, "Designation": designation, "Salary": salary}])
                 updated_df = pd.concat([df, new_data], ignore_index=True)
                 conn.update(data=updated_df)
-                st.success(f"✅ {name} has been saved to Google Sheets!")
+                st.success(f"✅ {name} has been saved!")
                 st.balloons()
             else:
                 st.warning("Please enter a name.")
@@ -53,14 +54,21 @@ elif choice == "Add New Employee":
 elif choice == "Delete Employee":
     st.subheader("🗑️ Delete Records")
     if not df.empty:
-        employee_to_delete = st.selectbox("Select employee to remove", df["Name"].tolist())
-        confirm_delete = st.button("Confirm Delete")
-
-        if confirm_delete:
-            # Remove the selected row
-            updated_df = df[df["Name"] != employee_to_delete]
-            conn.update(data=updated_df)
-            st.success(f"❌ {employee_to_delete} has been removed!")
-            st.cache_data.clear() # Refresh data
+        # Create a clean list of names
+        names_list = df["Name"].unique().tolist()
+        
+        # Add a placeholder so it doesn't auto-select the first name
+        names_list.insert(0, "Choose an employee...")
+        
+        selected_employee = st.selectbox("Which employee do you want to remove?", names_list)
+        
+        if selected_employee != "Choose an employee...":
+            st.warning(f"Are you sure you want to delete {selected_employee}?")
+            if st.button("Confirm Delete"):
+                # Remove the selected row
+                updated_df = df[df["Name"] != selected_employee]
+                conn.update(data=updated_df)
+                st.success(f"❌ {selected_employee} has been removed from cloud!")
+                st.cache_data.clear() # This clears the old data from memory
     else:
         st.info("No employees available to delete.")
