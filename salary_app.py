@@ -1,48 +1,66 @@
 import streamlit as st
-import pandas as pd
 from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 
-# Page Setup
+# Page Configuration
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
-st.title("📂 Salary Management System (Live Cloud)")
 
-# Google Sheet URL
-url = "https://docs.google.com/spreadsheets/d/13eYpH7tTx-SCDkCVRFzq5Ar7QXccXoLBIRfsmvufp3Y/edit?usp=sharing"
+st.title("🏫 The Educators - Salary Management System")
 
-# Connection setup with direct handling
+# Establish Connection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_live_data():
-    return conn.read(spreadsheet=url, ttl="0")
+# Fetch Data
+try:
+    df = conn.read(ttl="0")
+    df = df.dropna(how="all")
+except Exception as e:
+    st.error(f"Error reading data: {e}")
+    df = pd.DataFrame()
 
-df = load_live_data()
+# Sidebar Menu
+menu = ["Dashboard", "Add New Employee", "Delete Employee"]
+choice = st.sidebar.selectbox("Main Menu", menu)
 
-menu = ["📊 Dashboard", "➕ Add New Employee", "🗑️ Manage Staff"]
-choice = st.sidebar.selectbox("Menu", menu)
-
-if choice == "📊 Dashboard":
-    st.subheader("Live Employee Records")
+# --- DASHBOARD ---
+if choice == "Dashboard":
+    st.subheader("📊 Employee Database")
     if not df.empty:
         st.dataframe(df, use_container_width=True)
     else:
-        st.info("No records found in the Google Sheet.")
+        st.info("No records found in the cloud.")
 
-elif choice == "➕ Add New Employee":
-    st.subheader("Add New Employee")
-    next_id = int(df['ID'].max()) + 1 if not df.empty else 101
-    
+# --- ADD NEW EMPLOYEE ---
+elif choice == "Add New Employee":
+    st.subheader("📝 Registration Form")
     with st.form("add_form"):
-        name = st.text_input("Full Name")
-        des = st.text_input("Designation")
-        sal = st.number_input("Basic Salary", min_value=0)
-        
-        if st.form_submit_button("Save to Cloud"):
-            new_row = pd.DataFrame([{"ID": next_id, "Name": name, "Designation": des, "Basic_Salary": sal, "Remaining_CL": 10, "Advance_Balance": 0}])
-            updated_df = pd.concat([df, new_row], ignore_index=True)
-            # Direct Update Method
-            try:
-                conn.update(spreadsheet=url, data=updated_df)
-                st.success(f"{name} has been saved!")
-                st.rerun()
-            except Exception as e:
-                st.error("Connection Refused. Please check Google Sheet Share settings.")
+        name = st.text_input("Employee Name")
+        designation = st.selectbox("Designation", ["Teacher", "Principal", "Admin Staff", "Security", "Other"])
+        salary = st.number_input("Basic Salary", min_value=0)
+        submit = st.form_submit_button("Save to Cloud")
+
+        if submit:
+            if name:
+                new_data = pd.DataFrame([{"Name": name, "Designation": designation, "Salary": salary}])
+                updated_df = pd.concat([df, new_data], ignore_index=True)
+                conn.update(data=updated_df)
+                st.success(f"✅ {name} has been saved to Google Sheets!")
+                st.balloons()
+            else:
+                st.warning("Please enter a name.")
+
+# --- DELETE EMPLOYEE ---
+elif choice == "Delete Employee":
+    st.subheader("🗑️ Delete Records")
+    if not df.empty:
+        employee_to_delete = st.selectbox("Select employee to remove", df["Name"].tolist())
+        confirm_delete = st.button("Confirm Delete")
+
+        if confirm_delete:
+            # Remove the selected row
+            updated_df = df[df["Name"] != employee_to_delete]
+            conn.update(data=updated_df)
+            st.success(f"❌ {employee_to_delete} has been removed!")
+            st.cache_data.clear() # Refresh data
+    else:
+        st.info("No employees available to delete.")
