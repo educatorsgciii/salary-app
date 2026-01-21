@@ -6,13 +6,15 @@ import time
 # Page Configuration
 st.set_page_config(page_title="The Educators Salary System", layout="wide")
 
-# --- CUSTOM CSS FOR PROFESSIONAL LOOK ---
+# --- CUSTOM CSS FOR MINIMALIST LOOK ---
 st.markdown("""
     <style>
-    /* Sidebar styling */
-    [data-testid="stSidebar"] { background-color: #f8f9fa; }
+    /* 1. Sidebar Light Grey Background */
+    [data-testid="stSidebar"] {
+        background-color: #F0F2F6 !important;
+    }
     
-    /* Sidebar buttons */
+    /* Sidebar buttons styling */
     .stSidebar div.stButton > button {
         width: 100%;
         border-radius: 8px;
@@ -21,33 +23,33 @@ st.markdown("""
         color: white;
         font-weight: bold;
         border: none;
-        margin-bottom: 5px;
     }
 
-    /* Small & Sleek Action Buttons in Table */
+    /* 2. Transparent Action Buttons (No Box, No Border) */
     .stButton > button {
-        padding: 2px 10px;
-        font-size: 14px;
-        border-radius: 4px;
-        border: 1px solid #e0e0e0;
-        background-color: white;
-        height: 28px;
-        line-height: 1;
+        border: none !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+        color: inherit !important;
+        padding: 0px !important;
+        font-size: 18px !important;
+        height: auto !important;
+        width: auto !important;
     }
     
-    /* Hover effect for action buttons */
+    /* Hover effect for icons only */
     .stButton > button:hover {
-        border-color: #3B82F6;
-        color: #3B82F6;
-        background-color: #f0f7ff;
+        transform: scale(1.2);
+        background-color: transparent !important;
+        color: #3B82F6 !important;
     }
 
-    /* Table Header Styling */
+    /* Professional Table Header */
     .header-style {
         font-size: 16px;
         font-weight: bold;
         color: #1E3A8A;
-        border-bottom: 2px solid #1E3A8A;
+        border-bottom: 2px solid #D1D5DB;
         padding-bottom: 5px;
     }
     </style>
@@ -81,7 +83,7 @@ if st.session_state.page == "Dashboard":
     st.subheader("📊 Employee Database")
     
     if not df.empty:
-        # Professional Headers
+        # Table Layout
         h_cols = st.columns([0.6, 2, 2, 2, 1.5, 1.2])
         headers = ["ID", "Name", "CNIC", "Designation", "Salary", "Actions"]
         for i, h in enumerate(headers):
@@ -96,7 +98,7 @@ if st.session_state.page == "Dashboard":
             sal = row.get("Basic_Salary", row.get("Salary", 0))
             cols[4].write(f"Rs. {sal}")
             
-            # Action Buttons: Tiny & Professional
+            # Action Icons without Boxes
             btn_col1, btn_col2 = cols[5].columns(2)
             if btn_col1.button("✏️", key=f"ed_{index}"):
                 st.session_state.edit_mode = True
@@ -109,9 +111,9 @@ if st.session_state.page == "Dashboard":
                     st.cache_data.clear()
                     st.rerun()
 
-        # Edit Section
+        # Edit Mode (Same as before)
         if st.session_state.get("edit_mode"):
-            st.info(f"Editing ID: {st.session_state.edit_data.get('ID')}")
+            st.info(f"Editing: {st.session_state.edit_data.get('Name')}")
             with st.form("edit_form"):
                 n_name = st.text_input("Name", value=st.session_state.edit_data.get('Name'))
                 n_cnic = st.text_input("CNIC", value=st.session_state.edit_data.get('CNIC'))
@@ -145,6 +147,7 @@ elif st.session_state.page == "Add New Employee":
         submit = st.form_submit_button("Save Record")
 
         if submit and name and cnic:
+            # ID Logic
             if not df.empty and "ID" in df.columns:
                 max_id = pd.to_numeric(df["ID"], errors='coerce').max()
                 next_id = 101 if pd.isna(max_id) else int(max_id) + 1
